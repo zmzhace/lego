@@ -32,7 +32,11 @@ class MappingDb:
         self.conn.commit()
 
     def rebuild(self, ldd_names: dict, bl_parts: dict, bl_numbers: set) -> None:
+        manual_ids = {r[0] for r in self.conn.execute(
+            "SELECT design_id FROM parts WHERE match_type='manual'")}
         for design_id, name in ldd_names.items():
+            if design_id in manual_ids:
+                continue
             if design_id in bl_numbers:
                 self.conn.execute(
                     "INSERT OR REPLACE INTO parts VALUES (?,?,?,?)",
