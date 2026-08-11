@@ -46,6 +46,7 @@ class LIFReader:
                 self.handle.seek(1, 1)
                 offset += 2
             offset += 6
+            self._packed_offset += 20
             if entry_type == 1:
                 offset = self._parse(prefix=name, offset=offset)
             elif entry_type == 2:
