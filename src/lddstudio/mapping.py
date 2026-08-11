@@ -25,11 +25,21 @@ def _norm(s: str) -> str:
 class MappingDb:
     def __init__(self, path: str):
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        self.path = path
         self.conn = sqlite3.connect(path)
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS parts (design_id TEXT PRIMARY KEY, "
             "bl_number TEXT, name TEXT, match_type TEXT)")
         self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
 
     def rebuild(self, ldd_names: dict, bl_parts: dict, bl_numbers: set) -> None:
         manual_ids = {r[0] for r in self.conn.execute(
@@ -56,6 +66,32 @@ class MappingDb:
                     "INSERT OR REPLACE INTO parts VALUES (?,?,?,?)",
                     (design_id, None, name, "unmatched"))
         self.conn.commit()
+
+    def seed_from_studio(self, ldd_to_bl: dict, names: dict = None,
+                         force=False) -> int:
+        """Seed rows from Studio's authoritative LDD->BL mapping.
+
+        Rows with match_type='manual' are preserved.  'exact' rows from a
+        previous authoritative build are refreshed only when force=True
+        (so user-verified exact mappings stay stable).
+        """
+        names = names or {}
+        seeded = 0
+        for design_id, bl_number in ldd_to_bl.items():
+            cur = self.conn.execute(
+                "SELECT match_type FROM parts WHERE design_id=?",
+                (design_id,)).fetchone()
+            if cur and cur[0] in ("manual",):
+                continue
+            if cur and cur[0] == "exact" and not force:
+                continue
+            name = names.get(design_id, "")
+            self.conn.execute(
+                "INSERT OR REPLACE INTO parts VALUES (?,?,?,?)",
+                (design_id, bl_number, name, "exact"))
+            seeded += 1
+        self.conn.commit()
+        return seeded
 
     def lookup(self, design_id: str):
         row = self.conn.execute(

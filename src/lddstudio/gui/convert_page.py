@@ -3,12 +3,14 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QLineEdit, QPushButton, QFileDialog, QCheckBox,
                                QProgressBar)
 
-from ..cli import build_mapping_db
+from ..cli import build_mapping_db, find_studio_data_dir
 from ..converter import convert
 from ..colors import ColorProcessor, load_bl_color_map
 from ..ldd_db import find_ldd_db, load_ldd_database
 from ..mapping import MappingDb, default_db_path
 from ..studio_lib import find_studio_dir, scan_studio_part_numbers
+from ..studio_data import load_color_definition, load_transform_offsets, \
+    studio_colors_for_ldd
 from ..transform import TransformFixer
 
 
@@ -70,25 +72,30 @@ class ConvertPage(QWidget):
         if ldd_db is None:
             from ..ldd_db import LddDatabase
             ldd_db = LddDatabase({}, {}, {}, {})
-        db = self._seed_mapping(ldd_db)
+        studio_dir = find_studio_dir()
+        studio_data_dir = find_studio_data_dir()
+        db = self._seed_mapping(ldd_db, studio_data_dir, studio_dir)
         bl_map = load_bl_color_map(os.path.join(self.data_dir, "ldd_to_bl_colors.csv"))
-        cp = ColorProcessor(bl_map, {}, ldd_db.materials)
-        fixer = TransformFixer(ldd_db.geo_bounding, {})
+        studio_colors = studio_colors_for_ldd(
+            load_color_definition(studio_data_dir)) if studio_data_dir else {}
+        cp = ColorProcessor(bl_map, studio_colors, ldd_db.materials,
+                            studio_color_map=studio_colors)
+        offsets = load_transform_offsets(studio_data_dir) if studio_data_dir else {}
+        fixer = TransformFixer(ldd_db.geo_bounding, {}, offsets)
         rep = convert(inp, out, db, ldd_db, cp, fixer,
                       fix_transform=self.fix_transform_chk.isChecked())
         msg = "转换完成"
         if self.custom_color_chk.isChecked() and rep.custom_colors:
             cc_dir = os.path.dirname(os.path.abspath(out))
-            cc_path = os.path.join(cc_dir, "studio_custom_colors.xml")
-            with open(cc_path, "w", encoding="utf-8") as f:
-                f.write(cp.build_studio_custom_color_xml(rep.custom_colors))
+            cc_path = os.path.join(cc_dir, "studio_custom_colors.txt")
+            cp.build_studio_custom_color_csv(rep.custom_colors, cc_path)
             msg += "；自定义颜色已写入 {}".format(cc_path)
         self.progress.setValue(100)
         self.status_label.setText(msg)
         if self.report_sink:
             self.report_sink(rep)
 
-    def _seed_mapping(self, ldd_db=None):
+    def _seed_mapping(self, ldd_db=None, studio_data_dir="", studio_dir=""):
         if ldd_db is None:
             ldd_path = find_ldd_db()
             ldd_db = load_ldd_database(ldd_path) if ldd_path else None
@@ -97,7 +104,8 @@ class ConvertPage(QWidget):
                 ldd_db = LddDatabase({}, {}, {}, {})
         csv_path = os.path.join(self.data_dir, "parts.csv.gz")
         rebrickable_csv = csv_path if os.path.exists(csv_path) else None
-        studio_numbers = scan_studio_part_numbers(find_studio_dir())
+        studio_numbers = scan_studio_part_numbers(studio_dir or find_studio_dir())
         build_mapping_db(default_db_path(), ldd_db, rebrickable_csv=rebrickable_csv,
-                         studio_numbers=studio_numbers)
+                         studio_numbers=studio_numbers,
+                         studio_data_dir=studio_data_dir or find_studio_data_dir())
         return MappingDb(default_db_path())

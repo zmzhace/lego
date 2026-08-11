@@ -176,6 +176,9 @@ class LddDatabase:
 
 
 def find_ldd_db() -> str:
+    override = os.environ.get("LDDSTUDIO_LDD_DB")
+    if override and os.path.exists(override):
+        return override
     base = os.environ.get("USERPROFILE") or os.environ.get("HOME") or ""
     if platform.system() == "Windows":
         candidates = [
@@ -184,6 +187,11 @@ def find_ldd_db() -> str:
             os.path.join(base, "AppData", "Roaming", "LEGO Company",
                          "LEGO Digital Designer", "db.lif"),
         ]
+        # portable install on drive roots
+        for drive in ("D:", "E:"):
+            candidates.append(os.path.join(drive, "LEGO Digital Designer", "Assets.lif"))
+            candidates.append(os.path.join(drive, "LEGO Digital Designer", "db"))
+            candidates.append(os.path.join(drive, "LEGO Digital Designer", "db.lif"))
     elif platform.system() == "Darwin":
         candidates = [
             os.path.join(base, "Library", "Application Support",

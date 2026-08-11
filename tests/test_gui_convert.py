@@ -46,7 +46,7 @@ def test_custom_color_checkbox_writes_xml(app, tmp_path, monkeypatch):
     page.output_edit.setText(out)
     page.on_convert()
 
-    cc_path = tmp_path / "studio_custom_colors.xml"
+    cc_path = tmp_path / "studio_custom_colors.txt"
     assert cc_path.exists()
     content = cc_path.read_text(encoding="utf-8")
     assert "C99" in content
