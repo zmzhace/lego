@@ -29,6 +29,11 @@
 - **自定义颜色**：LDD 自定义材料自动分配 Studio 色码（520xxx 高位区），
   写入 Studio 的 `CustomColorDefinition.txt`，重启后 Studio 即可识别
 
+真实模型回归（`tests/fixtures/models/`）：
+- 21 个从 GitHub 下载的真实 LDD 模型全部转换通过（含 15000 件马赛克、4608 件蒙娜丽莎、2136 件 Grand Emporium、1318 件福特野马）
+- 每项断言：零件数不变、0 未匹配、输出编号全部存在于 Studio 零件库
+- 批量压力测试见 `pytest tests/test_real_models.py`
+
 ## 开发
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e . pytest PySide6 lxml
