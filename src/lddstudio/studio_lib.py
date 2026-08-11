@@ -27,8 +27,8 @@ def find_studio_dir() -> str:
     ]
     # common extra drive roots (D:, E:)
     for drive in ("D:", "E:"):
-        candidates.append(os.path.join(drive, "Studio 2.0"))
-        candidates.append(os.path.join(drive, "BrickLink Studio", "Studio 2.0"))
+        candidates.append(os.path.join(drive + os.sep, "Studio 2.0"))
+        candidates.append(os.path.join(drive + os.sep, "BrickLink Studio", "Studio 2.0"))
     if base4:
         candidates.append(os.path.join(base4, "Studio 2.0"))
     for c in candidates:

@@ -135,6 +135,21 @@ def build_ldd_to_bl_map(rows):
     return out
 
 
+def build_bl_number_set(rows):
+    """Return the set of BL part numbers Studio knows (incl. rows with no LDD id).
+
+    Used for identity fallback: an LDD designID that equals a Studio BL number
+    maps to itself even when the LDD column of the row is empty.
+    """
+    out = set()
+    for pd in rows:
+        if pd.bl_no:
+            out.add(pd.bl_no)
+        elif pd.ldraw_no:
+            out.add(_ldraw_no_to_bl(pd.ldraw_no))
+    return out
+
+
 def _ldraw_no_to_bl(ldraw_no):
     """'3001.dat' -> '3001'; keeps 'bl_973pb1234c01' style slugs."""
     return ldraw_no.split(".dat")[0] if ldraw_no else ""

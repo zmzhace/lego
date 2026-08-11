@@ -71,10 +71,12 @@ def test_convert_writes_custom_color_id_and_reports():
     cp = ColorProcessor({}, {}, {})
     fixer = TransformFixer({}, {})
     rep = convert("tmp/in.lxf", "tmp/out.lxf", db, ldd_db, cp, fixer, fix_transform=False)
-    assert "C77" in rep.custom_colors
+    assert len(rep.custom_colors) == 1
+    cid = next(iter(rep.custom_colors))
+    assert cid.isdigit()
     with zipfile.ZipFile("tmp/out.lxf") as z:
         data = z.read("IMAGE100.LXFML").decode()
-    assert 'materials="C77"' in data
+    assert 'materials="{}"'.format(cid) in data
 
 
 def test_convert_applies_offset_by_original_ldd_id():

@@ -1,7 +1,14 @@
-# LDD → Studio 转换工具
+# LDD → Studio 一键迁移工具
 
-Windows 桌面工具：读取 LDD `.lxf` 工程，修复零件编号/颜色/变换矩阵后输出干净 `.lxf`，
-由 Studio 2.0 自带导入打开，无问号、无乱飞，BOM 准确。
+给客户的 Windows 桌面工具：**一个按钮**把 LDD `.lxf` 工程转成 Studio 2.0 能正确打开的文件——
+无问号零件、无乱飞、自定义颜色自动迁移、BOM 准确。
+
+## 客户使用方法（一键）
+1. 双击打开程序（无需配置，自动探测本机 LDD 与 Studio 2.0）
+2. 点"浏览"选择 LDD 工程 `.lxf`
+3. 点"一键迁移"
+4. 输出文件（`原文件名_studio.lxf`）生成在源文件旁；自定义颜色自动注册到 Studio
+5. **重启 Studio 2.0** → 用 Studio 打开输出文件（Studio 会自动应用已注册的自定义颜色）
 
 ## 核心原理：使用 Studio 官方数据做精确映射
 
@@ -19,18 +26,16 @@ Windows 桌面工具：读取 LDD `.lxf` 工程，修复零件编号/颜色/变�
   其余列在"未匹配"报告中可手动指定；LDD 调色板 2154 个零件 100% 映射
 - **变换**：2487 个零件有 Studio 官方旋转/平移修正量（1101 个含旋转）
 - **颜色**：198 个 LDD 色码精确对应 Studio 颜色
-
-## 使用
-1. 首次运行自动探测 LDD 数据库与 Studio 2.0 目录
-   （也可用环境变量 `LDDSTUDIO_LDD_DB` / `LDDSTUDIO_STUDIO_DIR` 指定）
-2. 转换页选择 .lxf → 输出路径 → 转换
-3. 报告页查看替换/未匹配/自定义色；未匹配可右键手动指定编号
-4. 输出文件用 Studio 2.0 打开
+- **自定义颜色**：LDD 自定义材料自动分配 Studio 色码（520xxx 高位区），
+  写入 Studio 的 `CustomColorDefinition.txt`，重启后 Studio 即可识别
 
 ## 开发
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e . pytest PySide6 lxml
 pytest tests/
+
+打包给客户：
+pyinstaller build.spec
 
 ## 已知限制
 - LDD 数据库 `db.lif` 在 LDD 运行时被独占锁定，此时只能使用 Studio 数据做映射；

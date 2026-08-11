@@ -210,9 +210,10 @@ def find_ldd_db() -> str:
         ]
         # portable install on drive roots
         for drive in ("D:", "E:"):
-            candidates.append(os.path.join(drive, "LEGO Digital Designer", "Assets.lif"))
-            candidates.append(os.path.join(drive, "LEGO Digital Designer", "db"))
-            candidates.append(os.path.join(drive, "LEGO Digital Designer", "db.lif"))
+            root = drive + os.sep
+            candidates.append(os.path.join(root, "LEGO Digital Designer", "Assets.lif"))
+            candidates.append(os.path.join(root, "LEGO Digital Designer", "db"))
+            candidates.append(os.path.join(root, "LEGO Digital Designer", "db.lif"))
     elif platform.system() == "Darwin":
         candidates = [
             os.path.join(base, "Library", "Application Support",

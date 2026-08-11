@@ -15,7 +15,27 @@ def test_resolve_unknown_color_generates_custom():
     cp = ColorProcessor(make_bl_map(), {}, {})
     r = cp.resolve("77")   # 不在官方映射
     assert r.is_custom
-    assert r.bl_color_id.startswith("C")
+    assert r.bl_color_id.isdigit()
+    assert int(r.bl_color_id) >= 520000
+
+
+def test_resolve_known_ldd_material_gets_real_rgb():
+    from lddstudio.ldd_db import MaterialDef
+    mats = {"77": MaterialDef("77", 10, 20, 30, 255, "Solid", "My Custom")}
+    cp = ColorProcessor({}, {}, mats)
+    r = cp.resolve("77")
+    assert r.is_custom
+    assert r.r == 10 and r.g == 20 and r.b == 30
+    assert r.name == "My Custom"
+    assert r.bl_color_id.isdigit()
+
+
+def test_custom_codes_do_not_collide_with_existing():
+    cp = ColorProcessor({}, {}, {}, existing_custom_codes={520000})
+    r1 = cp.resolve("77")
+    r2 = cp.resolve("78")
+    assert r1.bl_color_id == "520001"
+    assert r2.bl_color_id == "520002"
 
 def test_build_custom_color_xml_contains_entries():
     cp = ColorProcessor(make_bl_map(), {}, {})

@@ -1,6 +1,7 @@
 import csv
 import gzip
 import io
+import os
 import zipfile
 import pytest
 pytest.importorskip("PySide6")
@@ -64,12 +65,12 @@ def test_gui_seed_mapping_matches_known_part(app, tmp_path, monkeypatch):
     assert m is not None and m.bl_number == "3001" and m.match_type == "exact"
 
     inp = str(tmp_path / "in.lxf")
-    out = str(tmp_path / "out.lxf")
+    out = str(tmp_path / "in_studio.lxf")
     _make_input_lxf(inp)
     reports = []
     page.report_sink = reports.append
     page.input_edit.setText(inp)
-    page.output_edit.setText(out)
     page.on_convert()
     assert reports
     assert all(m.design_id != "3001" for m in reports[0].unmatched)
+    assert os.path.exists(out)

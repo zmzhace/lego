@@ -1,3 +1,4 @@
+import os
 import pytest
 pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication
@@ -10,11 +11,11 @@ def app():
 def test_convert_page_has_widgets(app):
     page = ConvertPage()
     assert page.input_edit is not None
-    assert page.output_edit is not None
     assert page.status_label is not None
+    assert page.run_btn is not None
 
 
-def test_custom_color_checkbox_writes_xml(app, tmp_path, monkeypatch):
+def test_one_click_convert_generates_output(app, tmp_path, monkeypatch):
     import zipfile
     from lddstudio.gui import convert_page
     from lddstudio.ldd_db import LddDatabase
@@ -36,18 +37,17 @@ def test_custom_color_checkbox_writes_xml(app, tmp_path, monkeypatch):
              b'materials="99"><Bone refID="0" transformation="1,0,0,0,1,0,0,0,1,0,0,0"/>'
              b'</Part></Brick></Bricks></LXFML>')
     inp = str(tmp_path / "in.lxf")
-    out = str(tmp_path / "out.lxf")
     with zipfile.ZipFile(inp, "w") as z:
         z.writestr("IMAGE100.LXFML", lxfml)
 
     page = ConvertPage(report_sink=lambda r: None, data_dir=str(data_dir))
     page.custom_color_chk.setChecked(True)
     page.input_edit.setText(inp)
-    page.output_edit.setText(out)
     page.on_convert()
 
-    cc_path = tmp_path / "studio_custom_colors.txt"
-    assert cc_path.exists()
-    content = cc_path.read_text(encoding="utf-8")
-    assert "C99" in content
-    assert str(cc_path) in page.status_label.text()
+    out = str(tmp_path / "in_studio.lxf")
+    assert os.path.exists(out)
+    with zipfile.ZipFile(out) as z:
+        xml = z.read("IMAGE100.LXFML").decode()
+    assert 'designID="3001"' in xml
+    assert "迁移完成" in page.status_label.text()
