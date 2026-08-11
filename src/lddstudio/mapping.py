@@ -65,6 +65,9 @@ class MappingDb:
             return PartMapping(*row)
         return None
 
+    def is_empty(self) -> bool:
+        return self.conn.execute("SELECT 1 FROM parts LIMIT 1").fetchone() is None
+
     def set_manual(self, design_id: str, bl_number: str) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO parts VALUES (?,?,"

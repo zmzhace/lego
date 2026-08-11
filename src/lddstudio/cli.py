@@ -8,9 +8,11 @@ from .colors import ColorProcessor, load_bl_color_map
 from .transform import TransformFixer
 from .converter import convert
 from .resources import data_dir
+from .studio_lib import find_studio_dir, scan_studio_part_numbers
 
 
-def build_mapping_db(db_path, ldd_db, rebrickable_csv=None):
+def build_mapping_db(db_path, ldd_db, rebrickable_csv=None, studio_numbers=None,
+                     force_rebuild=False):
     db = MappingDb(db_path)
     bl_parts = {}
     bl_numbers = set()
@@ -18,7 +20,10 @@ def build_mapping_db(db_path, ldd_db, rebrickable_csv=None):
         from .rebrickable import parse_rebrickable_parts_csv
         bl_parts = parse_rebrickable_parts_csv(rebrickable_csv)
         bl_numbers = set(bl_parts.keys())
-    db.rebuild(ldd_db.primitive_names, bl_parts, bl_numbers)
+    if studio_numbers:
+        bl_numbers |= set(studio_numbers)
+    if force_rebuild or db.is_empty():
+        db.rebuild(ldd_db.primitive_names, bl_parts, bl_numbers)
     return db
 
 
@@ -30,6 +35,7 @@ def main(argv=None) -> int:
     conv.add_argument("output")
     conv.add_argument("--mapping")
     conv.add_argument("--rebrickable")
+    conv.add_argument("--rebuild-mapping", action="store_true")
     conv.add_argument("--ldd-db")
     conv.add_argument("--no-fix-transform", action="store_true")
     args = parser.parse_args(argv)
@@ -38,7 +44,9 @@ def main(argv=None) -> int:
         ldd_path = args.ldd_db or find_ldd_db()
         ldd_db = load_ldd_database(ldd_path) if ldd_path else LddDatabase({}, {}, {}, {})
         db_path = args.mapping or default_db_path()
-        db = build_mapping_db(db_path, ldd_db, args.rebrickable)
+        db = build_mapping_db(db_path, ldd_db, args.rebrickable,
+                              studio_numbers=scan_studio_part_numbers(find_studio_dir()),
+                              force_rebuild=args.rebuild_mapping)
         bl_map = load_bl_color_map(os.path.join(data_dir(), "ldd_to_bl_colors.csv"))
         cp = ColorProcessor(bl_map, {}, ldd_db.materials)
         fixer = TransformFixer(ldd_db.geo_bounding, {})
