@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QLineEdit, QPushButton, QFileDialog, QCheckBox,
                                QProgressBar)
 
+from ..cli import build_mapping_db
 from ..converter import convert
 from ..colors import ColorProcessor, load_bl_color_map
 from ..ldd_db import find_ldd_db, load_ldd_database
@@ -65,7 +66,7 @@ class ConvertPage(QWidget):
         if ldd_db is None:
             from ..ldd_db import LddDatabase
             ldd_db = LddDatabase({}, {}, {}, {})
-        db = MappingDb(default_db_path())
+        db = self._seed_mapping(ldd_db)
         bl_map = load_bl_color_map(os.path.join(self.data_dir, "ldd_to_bl_colors.csv"))
         cp = ColorProcessor(bl_map, {}, ldd_db.materials)
         fixer = TransformFixer(ldd_db.geo_bounding, {})
@@ -74,3 +75,15 @@ class ConvertPage(QWidget):
         self.progress.setValue(100)
         if self.report_sink:
             self.report_sink(rep)
+
+    def _seed_mapping(self, ldd_db=None):
+        if ldd_db is None:
+            ldd_path = find_ldd_db()
+            ldd_db = load_ldd_database(ldd_path) if ldd_path else None
+            if ldd_db is None:
+                from ..ldd_db import LddDatabase
+                ldd_db = LddDatabase({}, {}, {}, {})
+        csv_path = os.path.join(self.data_dir, "parts.csv.gz")
+        rebrickable_csv = csv_path if os.path.exists(csv_path) else None
+        build_mapping_db(default_db_path(), ldd_db, rebrickable_csv=rebrickable_csv)
+        return MappingDb(default_db_path())
