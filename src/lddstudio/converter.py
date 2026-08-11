@@ -18,10 +18,11 @@ def convert(input_path, output_path, mapping_db, ldd_db, color_proc, fixer,
                 part.design_id = mapping.bl_number
             else:
                 report.unmatched.append(mapping or PartMapping(part.design_id, None, ldd_db.primitive_names.get(part.design_id, ""), "unmatched"))
-            for mat_id in part.materials:
-                res = color_proc.resolve(mat_id)
+            resolved = [color_proc.resolve(mat_id) for mat_id in part.materials]
+            for res in resolved:
                 if res.is_custom and res.bl_color_id not in report.custom_colors:
                     report.custom_colors[res.bl_color_id] = (res.name, res.r, res.g, res.b)
+            part.materials = [res.bl_color_id for res in resolved]
             if fix_transform:
                 part.bones = [fixer.fix(b, part.design_id) for b in part.bones]
 

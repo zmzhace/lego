@@ -8,6 +8,7 @@ from ..converter import convert
 from ..colors import ColorProcessor, load_bl_color_map
 from ..ldd_db import find_ldd_db, load_ldd_database
 from ..mapping import MappingDb, default_db_path
+from ..studio_lib import find_studio_dir, scan_studio_part_numbers
 from ..transform import TransformFixer
 
 
@@ -42,6 +43,9 @@ class ConvertPage(QWidget):
         self.progress = QProgressBar()
         layout.addWidget(self.progress)
 
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+
         self.run_btn = QPushButton("转换")
         self.run_btn.clicked.connect(self.on_convert)
         layout.addWidget(self.run_btn)
@@ -72,7 +76,15 @@ class ConvertPage(QWidget):
         fixer = TransformFixer(ldd_db.geo_bounding, {})
         rep = convert(inp, out, db, ldd_db, cp, fixer,
                       fix_transform=self.fix_transform_chk.isChecked())
+        msg = "转换完成"
+        if self.custom_color_chk.isChecked() and rep.custom_colors:
+            cc_dir = os.path.dirname(os.path.abspath(out))
+            cc_path = os.path.join(cc_dir, "studio_custom_colors.xml")
+            with open(cc_path, "w", encoding="utf-8") as f:
+                f.write(cp.build_studio_custom_color_xml(rep.custom_colors))
+            msg += "；自定义颜色已写入 {}".format(cc_path)
         self.progress.setValue(100)
+        self.status_label.setText(msg)
         if self.report_sink:
             self.report_sink(rep)
 
@@ -85,5 +97,7 @@ class ConvertPage(QWidget):
                 ldd_db = LddDatabase({}, {}, {}, {})
         csv_path = os.path.join(self.data_dir, "parts.csv.gz")
         rebrickable_csv = csv_path if os.path.exists(csv_path) else None
-        build_mapping_db(default_db_path(), ldd_db, rebrickable_csv=rebrickable_csv)
+        studio_numbers = scan_studio_part_numbers(find_studio_dir())
+        build_mapping_db(default_db_path(), ldd_db, rebrickable_csv=rebrickable_csv,
+                         studio_numbers=studio_numbers)
         return MappingDb(default_db_path())
