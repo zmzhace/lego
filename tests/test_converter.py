@@ -4,6 +4,7 @@ from lddstudio.mapping import MappingDb
 from lddstudio.ldd_db import LddDatabase, MaterialDef
 from lddstudio.colors import ColorProcessor
 from lddstudio.transform import TransformFixer
+from lddstudio.studio_data import TransformOffset
 
 def make_input(lxfml: bytes) -> str:
     os.makedirs("tmp", exist_ok=True)
@@ -74,3 +75,26 @@ def test_convert_writes_custom_color_id_and_reports():
     with zipfile.ZipFile("tmp/out.lxf") as z:
         data = z.read("IMAGE100.LXFML").decode()
     assert 'materials="C77"' in data
+
+
+def test_convert_applies_offset_by_original_ldd_id():
+    make_input(b'''<LXFML name="t"><Bricks>
+    <Brick refID="1" designID="6014"><Part refID="2" designID="6014" materials="23">
+    <Bone refID="0" transformation="1,0,0,0,1,0,0,0,1,0,0,0"/></Part></Brick>
+    </Bricks></LXFML>''')
+    db = MappingDb("tmp/conv_map2.db")
+    db.seed_from_studio({"6014": "6014a"})
+    db.close()
+    db = MappingDb("tmp/conv_map2.db")
+    ldd_db = LddDatabase({}, {"6014": "Wheel"}, {}, {})
+    cp = ColorProcessor({}, {}, {})
+    off = TransformOffset(0, 180, 0, 0, -0.25, -7.75)
+    fixer = TransformFixer({}, {}, {"6014": off})
+    rep = convert("tmp/in.lxf", "tmp/out.lxf", db, ldd_db, cp, fixer, fix_transform=True)
+    assert rep.replaced == [("6014", "6014a")]
+    with zipfile.ZipFile("tmp/out.lxf") as z:
+        data = z.read("IMAGE100.LXFML").decode()
+    assert 'designID="6014a"' in data
+    # 偏移应应用到骨骼变换（旋转 180 度 + 平移）
+    assert '-7.75' in data
+    db.close()

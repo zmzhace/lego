@@ -43,7 +43,8 @@ def build_mapping_db(db_path, ldd_db, rebrickable_csv=None, studio_numbers=None,
             db.seed_from_studio(ldd_to_bl, names=ldd_db.primitive_names,
                                 force=force_rebuild)
     if force_rebuild or db.is_empty():
-        db.rebuild(ldd_db.primitive_names, bl_parts, bl_numbers)
+        # Fuzzy-rebuild only the parts Studio does not know (keeps exact rows).
+        db.fill_fuzzy_gaps(ldd_db.primitive_names, bl_parts, bl_numbers)
     else:
         # Fill identity gaps: LDD ids not yet mapped but present in the
         # Studio library as same-numbered parts (e.g. 59489.dat).

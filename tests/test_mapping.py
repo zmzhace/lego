@@ -111,3 +111,19 @@ def test_seed_from_studio_keeps_exact_without_force(tmp_path):
         assert d.lookup("3001").bl_number == "3001"
     finally:
         d.close()
+
+
+def test_fill_fuzzy_gaps_preserves_exact(tmp_path):
+    d = MappingDb(str(tmp_path / "f.db"))
+    try:
+        d.seed_from_studio({"3001": "3001"})
+        d.fill_fuzzy_gaps({"3001": "Brick 2 x 4", "3002": "Brick 2 x 3",
+                           "99999": "Unknown Thing"},
+                          {"3002": "Brick 2 x 3"}, {"3002"})
+        assert d.lookup("3001").bl_number == "3001"
+        assert d.lookup("3001").match_type == "exact"
+        assert d.lookup("3002").bl_number == "3002"
+        assert d.lookup("3002").match_type == "exact"
+        assert d.lookup("99999").bl_number is None
+    finally:
+        d.close()

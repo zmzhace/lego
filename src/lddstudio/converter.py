@@ -12,19 +12,20 @@ def convert(input_path, output_path, mapping_db, ldd_db, color_proc, fixer,
 
     for brick in scene.bricks:
         for part in brick.parts:
-            mapping = mapping_db.lookup(part.design_id)
+            original_design_id = part.design_id
+            mapping = mapping_db.lookup(original_design_id)
             if mapping and mapping.bl_number:
-                report.replaced.append((part.design_id, mapping.bl_number))
+                report.replaced.append((original_design_id, mapping.bl_number))
                 part.design_id = mapping.bl_number
             else:
-                report.unmatched.append(mapping or PartMapping(part.design_id, None, ldd_db.primitive_names.get(part.design_id, ""), "unmatched"))
+                report.unmatched.append(mapping or PartMapping(original_design_id, None, ldd_db.primitive_names.get(original_design_id, ""), "unmatched"))
             resolved = [color_proc.resolve(mat_id) for mat_id in part.materials]
             for res in resolved:
                 if res.is_custom and res.bl_color_id not in report.custom_colors:
                     report.custom_colors[res.bl_color_id] = (res.name, res.r, res.g, res.b)
             part.materials = [res.bl_color_id for res in resolved]
             if fix_transform:
-                part.bones = [fixer.fix(b, part.design_id) for b in part.bones]
+                part.bones = [fixer.fix(b, original_design_id) for b in part.bones]
 
     save_lxf(pkg, output_path, {"IMAGE100.LXFML": serialize_lxfml(scene)})
     return report

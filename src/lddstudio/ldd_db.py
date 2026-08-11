@@ -112,6 +112,30 @@ def _to_int(value, default=0):
         return default
 
 
+def _annotation_name(node):
+    if node.hasAttribute("designname"):
+        return node.getAttribute("designname")
+    for child in node.childNodes:
+        if child.nodeName == "designname" and child.firstChild:
+            return child.firstChild.data
+    return ""
+
+
+def _annotation_aliases(node):
+    if node.hasAttribute("aliases"):
+        return node.getAttribute("aliases")
+    return ""
+
+
+def _annotation_value(node, attr):
+    if node.hasAttribute(attr):
+        return node.getAttribute(attr)
+    for child in node.childNodes:
+        if child.nodeName == attr and child.firstChild:
+            return child.firstChild.data
+    return ""
+
+
 def parse_materials_xml(data: bytes) -> dict:
     mats = {}
     doc = minidom.parseString(data)
@@ -130,19 +154,13 @@ def parse_materials_xml(data: bytes) -> dict:
     return mats
 
 
-def _annotation_name(node):
-    if node.hasAttribute("designname"):
-        return node.getAttribute("designname")
-    for child in node.childNodes:
-        if child.nodeName == "designname" and child.firstChild:
-            return child.firstChild.data
-    return ""
-
-
-def parse_primitive_xml(data: bytes) -> PrimitiveInfo:
+def parse_primitive_xml(data: bytes, fallback_id: str = "") -> PrimitiveInfo:
     doc = minidom.parseString(data)
     root = doc.documentElement
     name = ""
+    aliases = ""
+    design_id = (root.getAttribute("designID") or root.getAttribute("designid")
+                 or fallback_id)
     bounding, geo_bounding = {}, {}
     for node in root.childNodes:
         if node.nodeName in ("Annotations", "Annotation"):
@@ -150,6 +168,7 @@ def parse_primitive_xml(data: bytes) -> PrimitiveInfo:
             for child in nodes:
                 if child.nodeName == "Annotation":
                     name = _annotation_name(child) or name
+                    aliases = _annotation_aliases(child) or aliases
         elif node.nodeName == "Bounding":
             for child in node.childNodes:
                 if child.nodeName == "AABB":
@@ -160,7 +179,9 @@ def parse_primitive_xml(data: bytes) -> PrimitiveInfo:
                 if child.nodeName == "AABB":
                     geo_bounding = {k: child.getAttribute(k) for k in
                                     ("minX", "minY", "minZ", "maxX", "maxY", "maxZ")}
-    return PrimitiveInfo(design_id=root.tagName, design_name=name,
+    if not design_id and aliases:
+        design_id = aliases.split(",")[0].strip()
+    return PrimitiveInfo(design_id=design_id, design_name=name,
                          bounding=bounding, geo_bounding=geo_bounding)
 
 
@@ -207,6 +228,13 @@ def find_ldd_db() -> str:
     return ""
 
 
+def _design_id_from_path(norm_path: str) -> str:
+    """'.../Primitives/10058.xml' -> '10058'."""
+    base = os.path.basename(norm_path)
+    stem, _ext = os.path.splitext(base)
+    return stem
+
+
 def load_ldd_database(db_path: str) -> LddDatabase:
     primitives = {}
     materials = {}
@@ -223,7 +251,7 @@ def load_ldd_database(db_path: str) -> LddDatabase:
                         if norm.endswith("/Materials.xml"):
                             materials.update(parse_materials_xml(data))
                         elif "/Primitives/" in norm and "/LOD" not in norm:
-                            p = parse_primitive_xml(data)
+                            p = parse_primitive_xml(data, _design_id_from_path(norm))
                             primitives[norm] = p
                             names[p.design_id] = p.design_name
                             if p.geo_bounding:
@@ -257,7 +285,7 @@ def load_ldd_database(db_path: str) -> LddDatabase:
                     continue
             elif "/Primitives/" in name and "/LOD" not in name and name.endswith(".xml"):
                 try:
-                    p = parse_primitive_xml(entry.read())
+                    p = parse_primitive_xml(entry.read(), _design_id_from_path(name))
                     primitives[name] = p
                     names[p.design_id] = p.design_name
                     if p.geo_bounding:

@@ -93,6 +93,40 @@ class MappingDb:
         self.conn.commit()
         return seeded
 
+    def fill_fuzzy_gaps(self, ldd_names: dict, bl_parts: dict,
+                        bl_numbers: set) -> None:
+        """Fuzzy-match only parts that are not mapped yet.
+
+        Preserves 'exact' and 'manual' rows; only fills 'unmatched' (or
+        missing) design ids with 'auto' matches when a close name match is
+        found.
+        """
+        for design_id, name in ldd_names.items():
+            cur = self.conn.execute(
+                "SELECT bl_number FROM parts WHERE design_id=?",
+                (design_id,)).fetchone()
+            if cur and cur[0]:
+                continue
+            if design_id in bl_numbers:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO parts VALUES (?,?,?,?)",
+                    (design_id, design_id, name, "exact"))
+                continue
+            best, best_score = None, 0.0
+            for bl_num, bl_name in bl_parts.items():
+                score = SequenceMatcher(None, _norm(name), _norm(bl_name)).ratio()
+                if score > best_score:
+                    best, best_score = bl_num, score
+            if best and best_score >= 0.85:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO parts VALUES (?,?,?,?)",
+                    (design_id, best, name, "auto"))
+            else:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO parts VALUES (?,?,?,?)",
+                    (design_id, None, name, "unmatched"))
+        self.conn.commit()
+
     def lookup(self, design_id: str):
         row = self.conn.execute(
             "SELECT design_id, bl_number, name, match_type FROM parts "
