@@ -1,5 +1,6 @@
 import struct
-from lddstudio.ldd_db import (LIFReader, LOCReader, parse_materials_xml,
+from lddstudio.ldd_db import (LIFReader, LOCReader, LddDatabase,
+                              load_ldd_database, parse_materials_xml,
                               parse_primitive_xml)
 
 def make_lif(entries: dict) -> bytes:
@@ -27,3 +28,23 @@ def test_parse_primitive_xml():
     p = parse_primitive_xml(xml)
     assert p.design_name == "Brick 2x4"
     assert p.bounding["maxX"] == "31.8"
+
+def test_parse_materials_xml_bad_color_falls_back():
+    xml = b'<Materials><Material MatID="7" Red="abc" Green="0" Blue="38" Alpha="255" MaterialType="Solid"/></Materials>'
+    mats = parse_materials_xml(xml)
+    assert mats["7"].r == 0
+    assert mats["7"].material_type == "Solid"
+
+def test_load_ldd_database_folder_survives_bad_entries(tmp_path):
+    (tmp_path / "Materials.xml").write_bytes(b"<Materials>")
+    prim_dir = tmp_path / "Primitives"
+    prim_dir.mkdir()
+    (prim_dir / "3001.xml").write_bytes(
+        b'<Primitives><Annotation><designname>Brick 2x4</designname></Annotation>'
+        b'<Bounding><AABB minX="0" minY="0" minZ="0" maxX="31.8" maxY="15.8" maxZ="7.8"/></Bounding>'
+        b'<GeometryBounding><AABB minX="0" minY="0" minZ="0" maxX="31.8" maxY="15.8" maxZ="7.8"/></GeometryBounding></Primitives>')
+    (prim_dir / "bad.xml").write_bytes(b"<Primitives>")
+    db = load_ldd_database(str(tmp_path))
+    assert isinstance(db, LddDatabase)
+    assert db.primitive("/Primitives/3001.xml").design_name == "Brick 2x4"
+    assert "/Primitives/bad.xml" not in db._primitives

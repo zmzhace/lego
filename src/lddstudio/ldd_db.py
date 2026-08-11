@@ -104,6 +104,13 @@ class PrimitiveInfo(NamedTuple):
     geo_bounding: dict
 
 
+def _to_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def parse_materials_xml(data: bytes) -> dict:
     mats = {}
     doc = minidom.parseString(data)
@@ -112,10 +119,10 @@ def parse_materials_xml(data: bytes) -> dict:
             mid = node.getAttribute("MatID")
             mats[mid] = MaterialDef(
                 mat_id=mid,
-                r=int(node.getAttribute("Red")),
-                g=int(node.getAttribute("Green")),
-                b=int(node.getAttribute("Blue")),
-                a=int(node.getAttribute("Alpha")),
+                r=_to_int(node.getAttribute("Red")),
+                g=_to_int(node.getAttribute("Green")),
+                b=_to_int(node.getAttribute("Blue")),
+                a=_to_int(node.getAttribute("Alpha")),
                 material_type=node.getAttribute("MaterialType"),
                 name="",
             )
@@ -202,15 +209,18 @@ def load_ldd_database(db_path: str) -> LddDatabase:
                 full = os.path.join(dirpath, f)
                 norm = "/" + os.path.relpath(full, db_path).replace("\\", "/")
                 if f.endswith(".xml"):
-                    data = open(full, "rb").read()
-                    if norm.endswith("/Materials.xml"):
-                        materials.update(parse_materials_xml(data))
-                    elif "/Primitives/" in norm and "/LOD" not in norm:
-                        p = parse_primitive_xml(data)
-                        primitives[norm] = p
-                        names[p.design_id] = p.design_name
-                        if p.geo_bounding:
-                            geob[p.design_id] = p.geo_bounding
+                    try:
+                        data = open(full, "rb").read()
+                        if norm.endswith("/Materials.xml"):
+                            materials.update(parse_materials_xml(data))
+                        elif "/Primitives/" in norm and "/LOD" not in norm:
+                            p = parse_primitive_xml(data)
+                            primitives[norm] = p
+                            names[p.design_id] = p.design_name
+                            if p.geo_bounding:
+                                geob[p.design_id] = p.geo_bounding
+                    except Exception:
+                        continue
         loc = None
         for dirpath, _, files in os.walk(db_path):
             for f in files:
@@ -232,13 +242,19 @@ def load_ldd_database(db_path: str) -> LddDatabase:
                 loc = LOCReader(reader.filelist[name].read())
         for name, entry in reader.filelist.items():
             if name.endswith("Materials.xml"):
-                materials.update(parse_materials_xml(entry.read()))
+                try:
+                    materials.update(parse_materials_xml(entry.read()))
+                except Exception:
+                    continue
             elif "/Primitives/" in name and "/LOD" not in name and name.endswith(".xml"):
-                p = parse_primitive_xml(entry.read())
-                primitives[name] = p
-                names[p.design_id] = p.design_name
-                if p.geo_bounding:
-                    geob[p.design_id] = p.geo_bounding
+                try:
+                    p = parse_primitive_xml(entry.read())
+                    primitives[name] = p
+                    names[p.design_id] = p.design_name
+                    if p.geo_bounding:
+                        geob[p.design_id] = p.geo_bounding
+                except Exception:
+                    continue
         if loc:
             for mid, mat in materials.items():
                 if mid in loc.values:
