@@ -13,3 +13,6 @@ Windows 桌面工具：读取 LDD `.lxf` 工程，修复零件编号/颜色/变�
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e . pytest PySide6 lxml
 pytest tests/
+
+## 已知限制
+- 变换偏移补偿使用未校准的 studio_center=(0,0,0)；在真实 Studio 安装上完成校验/校准之前，请不要依赖"修复零件乱飞"的默认结果。

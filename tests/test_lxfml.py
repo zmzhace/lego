@@ -68,3 +68,36 @@ def test_malformed_transformation_tolerated():
     assert len(s.bricks) == 2
     assert s.bricks[0].parts[0].bones[0].transformation == [0.0] * 12
     assert s.bricks[1].parts[0].bones[0].transformation[0] == 2.0
+
+
+CAMERA_LXFML = b'''<LXFML name="test">
+<Meta><BrickSet version="1"/></Meta>
+<Cameras><Camera refID="0" transformation="1,0,0,0,1,0,0,0,1,0,0,0" fieldOfView="45" distance="300"/></Cameras>
+<Bricks>
+  <Brick refID="1" designID="3001">
+    <Part refID="2" designID="3001" materials="5">
+      <Bone refID="0" transformation="1,0,0,0,1,0,0,0,1,0,0,0"/>
+    </Part>
+  </Brick>
+</Bricks>
+<Author name="tester"/>
+</LXFML>'''
+
+def test_parse_cameras_and_extra_nodes():
+    s = parse_lxfml(CAMERA_LXFML)
+    assert s.cameras == [{"refID": "0",
+                          "transformation": "1,0,0,0,1,0,0,0,1,0,0,0",
+                          "fieldOfView": "45",
+                          "distance": "300"}]
+    assert len(s.extra_xml) == 1
+    assert "<Author name=\"tester\"/>" in s.extra_xml[0]
+
+def test_serialize_roundtrip_preserves_cameras_and_extra_nodes():
+    s = parse_lxfml(CAMERA_LXFML)
+    out = serialize_lxfml(s)
+    s2 = parse_lxfml(out)
+    assert s2.cameras == s.cameras
+    assert len(s2.extra_xml) == 1
+    assert s2.extra_xml[0] == s.extra_xml[0]
+    assert "fieldOfView=\"45\"" in out.decode()
+    assert "Author" in out.decode()

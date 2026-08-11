@@ -41,11 +41,13 @@ class Group:
 
 
 class LxfmlScene:
-    def __init__(self, name, brick_version, bricks, groups):
+    def __init__(self, name, brick_version, bricks, groups, cameras=None, extra_xml=None):
         self.name = name
         self.brick_version = brick_version
         self.bricks = bricks
         self.groups = [g.part_refs for g in groups]
+        self.cameras = cameras if cameras is not None else []
+        self.extra_xml = extra_xml if extra_xml is not None else []
 
 
 def _parse_part(node):
@@ -67,6 +69,8 @@ def parse_lxfml(data: bytes) -> LxfmlScene:
     brick_version = ""
     bricks = []
     groups = []
+    cameras = []
+    extra_xml = []
     for node in root.childNodes:
         if node.nodeName == "Meta":
             for child in node.childNodes:
@@ -86,12 +90,28 @@ def parse_lxfml(data: bytes) -> LxfmlScene:
                             refs = g.getAttribute("partRefs").split(",")
                             if refs != [""]:
                                 groups.append(Group(refs))
-    return LxfmlScene(name, brick_version, bricks, groups)
+        elif node.nodeName == "Cameras":
+            for cam in node.childNodes:
+                if cam.nodeName == "Camera":
+                    attrs = {}
+                    if cam.attributes:
+                        for a in cam.attributes.values():
+                            attrs[a.name] = a.value
+                    cameras.append(attrs)
+        elif node.nodeType == node.ELEMENT_NODE:
+            extra_xml.append(node.toxml())
+    return LxfmlScene(name, brick_version, bricks, groups, cameras, extra_xml)
 
 
 def serialize_lxfml(scene: LxfmlScene) -> bytes:
     lines = ['<LXFML name="{}">'.format(scene.name)]
     lines.append('<Meta><BrickSet version="{}"/></Meta>'.format(scene.brick_version))
+    if scene.cameras:
+        lines.append("<Cameras>")
+        for cam in scene.cameras:
+            attrs = " ".join('{}="{}"'.format(k, v) for k, v in cam.items())
+            lines.append("<Camera {}/>".format(attrs))
+        lines.append("</Cameras>")
     lines.append("<Bricks>")
     for b in scene.bricks:
         lines.append('<Brick refID="{}" designID="{}">'.format(b.ref_id, b.design_id))
@@ -111,5 +131,6 @@ def serialize_lxfml(scene: LxfmlScene) -> bytes:
     for grp in scene.groups:
         lines.append('<Group partRefs="{}"/>'.format(",".join(grp)))
     lines.append("</GroupSystem></GroupSystems>")
+    lines.extend(scene.extra_xml)
     lines.append("</LXFML>")
     return "".join(lines).encode("utf-8")
