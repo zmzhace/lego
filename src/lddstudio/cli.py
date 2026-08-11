@@ -7,8 +7,7 @@ from .ldd_db import find_ldd_db, load_ldd_database, LddDatabase
 from .colors import ColorProcessor, load_bl_color_map
 from .transform import TransformFixer
 from .converter import convert
-
-_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+from .resources import data_dir
 
 
 def build_mapping_db(db_path, ldd_db, rebrickable_csv=None):
@@ -40,7 +39,7 @@ def main(argv=None) -> int:
         ldd_db = load_ldd_database(ldd_path) if ldd_path else LddDatabase({}, {}, {}, {})
         db_path = args.mapping or default_db_path()
         db = build_mapping_db(db_path, ldd_db, args.rebrickable)
-        bl_map = load_bl_color_map(os.path.join(_DATA_DIR, "ldd_to_bl_colors.csv"))
+        bl_map = load_bl_color_map(os.path.join(data_dir(), "ldd_to_bl_colors.csv"))
         cp = ColorProcessor(bl_map, {}, ldd_db.materials)
         fixer = TransformFixer(ldd_db.geo_bounding, {})
         rep = convert(args.input, args.output, db, ldd_db, cp, fixer,
