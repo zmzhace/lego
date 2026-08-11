@@ -5,7 +5,10 @@ from typing import NamedTuple
 class Bone:
     def __init__(self, ref_id, transformation):
         self.ref_id = ref_id
-        self.transformation = [float(x) for x in transformation]
+        try:
+            self.transformation = [float(x) for x in transformation]
+        except (TypeError, ValueError):
+            self.transformation = [0.0] * 12
 
     def rotation3(self):
         t = self.transformation
@@ -80,7 +83,9 @@ def parse_lxfml(data: bytes) -> LxfmlScene:
                 if gs.nodeName == "GroupSystem":
                     for g in gs.childNodes:
                         if g.nodeName == "Group":
-                            groups.append(Group(g.getAttribute("partRefs").split(",")))
+                            refs = g.getAttribute("partRefs").split(",")
+                            if refs != [""]:
+                                groups.append(Group(refs))
     return LxfmlScene(name, brick_version, bricks, groups)
 
 
@@ -102,7 +107,9 @@ def serialize_lxfml(scene: LxfmlScene) -> bytes:
             lines.append("</Part>")
         lines.append("</Brick>")
     lines.append("</Bricks>")
-    lines.append('<GroupSystems><GroupSystem><Group partRefs="{}"/></GroupSystem></GroupSystems>'.format(
-        ",".join(g for grp in scene.groups for g in grp)))
+    lines.append("<GroupSystems><GroupSystem>")
+    for grp in scene.groups:
+        lines.append('<Group partRefs="{}"/>'.format(",".join(grp)))
+    lines.append("</GroupSystem></GroupSystems>")
     lines.append("</LXFML>")
     return "".join(lines).encode("utf-8")
