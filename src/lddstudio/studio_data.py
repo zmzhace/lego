@@ -24,6 +24,7 @@ PART_DEF_FILE = "StudioPartDefinition2.txt"
 COLOR_DEF_FILE = "StudioColorDefinition.txt"
 TRANSFORM_JSON_FILE = "ldraw_lxfml_mapping.json"
 ASSEMBLY_FILE = "ldraw_new.xml"
+DESIGNID_FILE = "designid.xml"
 
 
 class StudioPartDef:
@@ -80,8 +81,9 @@ def load_studio_mapping(data_dir):
     """Load the full authoritative LDD->BL mapping from Studio data.
 
     Combines StudioPartDefinition2.txt (explicit BL numbers) with the ldraw
-    filenames embedded in ldraw_lxfml_mapping.json (wider coverage) and
-    Assembly entries from ldraw_new.xml (gap filler).
+    filenames embedded in ldraw_lxfml_mapping.json (wider coverage),
+    Assembly entries from ldraw_new.xml, and <Transformation> tags which
+    carry additional per-part mappings (gap filler).
 
     Returns (ldd_to_bl, offsets, filenames):
       - ldd_to_bl: dict design_id -> BL number
@@ -96,7 +98,68 @@ def load_studio_mapping(data_dir):
         ldd_to_bl.setdefault(did, bl)
     for did, bl in load_assembly_mapping(data_dir).items():
         ldd_to_bl.setdefault(did, bl)
+    for did, bl in load_transformation_mapping(data_dir).items():
+        ldd_to_bl.setdefault(did, bl)
+    ldd_to_bl.update(_resolve_alternate_ids(ldd_to_bl, load_alternate_design_ids(data_dir)))
     return ldd_to_bl, offsets, filenames
+
+
+def load_alternate_design_ids(data_dir):
+    """Parse designid.xml: {alternate_design_id: main_design_id}.
+
+    LDD reused old part numbers (e.g. 86209) that Studio records as
+    alternatives of the current number (60601).  These are normalized to the
+    main designID before mapping to a BL number.
+    """
+    path = os.path.join(data_dir, DESIGNID_FILE)
+    if not os.path.isfile(path):
+        return {}
+    out = {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = f.read()
+    except OSError:
+        return {}
+    for m in re.finditer(r'<Part designID="(\d+)" alternateDesignIDs="([^"]+)"\s*/>', data):
+        main_id = m.group(1)
+        for alt in m.group(2).split(","):
+            alt = alt.strip()
+            if alt and alt.isdigit():
+                out[alt] = main_id
+    return out
+
+
+def _resolve_alternate_ids(ldd_to_bl, alternates):
+    """Extend ldd_to_bl so alternate IDs resolve to the main ID's BL number."""
+    for alt_id, main_id in alternates.items():
+        if alt_id in ldd_to_bl:
+            continue
+        bl = ldd_to_bl.get(main_id)
+        if bl:
+            ldd_to_bl[alt_id] = bl
+    return ldd_to_bl
+
+
+def load_transformation_mapping(data_dir):
+    """Parse <Transformation ldraw="X.dat" lego="Y"/> -> {Y: X}.
+
+    These cover per-part conversion mappings that may not appear in the JSON
+    or Assembly lists (e.g. glass parts, clips).  Returns the ldraw filename;
+    callers strip '.dat' for the BL number.
+    """
+    out = {}
+    for fname in (ASSEMBLY_FILE, "ldraw_lxfv56.xml"):
+        path = os.path.join(data_dir, fname)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                data = f.read()
+        except OSError:
+            continue
+        for m in re.finditer(r'<Transformation ldraw="([^"]*)" lego="(\d+)"', data):
+            out.setdefault(m.group(2), _ldraw_no_to_bl(m.group(1)))
+    return out
 
 
 def load_assembly_mapping(data_dir):

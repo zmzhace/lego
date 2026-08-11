@@ -13,6 +13,8 @@ from lddstudio.studio_data import (
     load_studio_mapping,
     build_ldd_to_bl_from_filenames,
     load_assembly_mapping,
+    load_transformation_mapping,
+    load_alternate_design_ids,
 )
 
 PARTDEF_HEADER = (
@@ -216,3 +218,48 @@ def test_load_studio_mapping_includes_assembly(tmp_path):
     ldd_to_bl, offsets, _ = load_studio_mapping(str(tmp_path))
     assert ldd_to_bl["73537"] == "4719c01"   # assembly fills the gap
     assert ldd_to_bl["41823"] == "41823"
+
+
+def test_load_transformation_mapping(tmp_path):
+    (tmp_path / "ldraw_new.xml").write_text(
+        '<LDrawMapping>'
+        '<Transformation ldraw="86209.dat" lego="60601" type="to_lego"/>'
+        '<Transformation ldraw="61252.dat" lego="61252" type=""/>'
+        '</LDrawMapping>', encoding="utf-8")
+    m = load_transformation_mapping(str(tmp_path))
+    assert m["60601"] == "86209"
+    assert m["61252"] == "61252"
+
+
+def test_load_studio_mapping_includes_transformation(tmp_path):
+    (tmp_path / "ldraw_new.xml").write_text(
+        '<LDrawMapping>'
+        '<Transformation ldraw="86209.dat" lego="60601" type="to_lego"/>'
+        '</LDrawMapping>', encoding="utf-8")
+    ldd_to_bl, _, _ = load_studio_mapping(str(tmp_path))
+    assert ldd_to_bl["60601"] == "86209"
+
+
+def test_load_alternate_design_ids(tmp_path):
+    (tmp_path / "designid.xml").write_text(
+        '<DesignIdMapping>'
+        '<Part designID="60601" alternateDesignIDs="86209, 35315" />'
+        '<Part designID="4006" alternateDesignIDs="88631" />'
+        '</DesignIdMapping>', encoding="utf-8")
+    alts = load_alternate_design_ids(str(tmp_path))
+    assert alts["86209"] == "60601"
+    assert alts["35315"] == "60601"
+    assert alts["88631"] == "4006"
+
+
+def test_alternate_id_resolves_to_main_bl(tmp_path):
+    content = make_partdef([
+        "264\t264\t60601\t264\t60601.dat\t60601\tGlass for Window 1 x 2 x 2 Flat Front\to\t13\t1\t1\tFalse\t\tFalse\t5001\t",
+    ])
+    (tmp_path / "StudioPartDefinition2.txt").write_text(content, encoding="utf-8")
+    (tmp_path / "designid.xml").write_text(
+        '<DesignIdMapping><Part designID="60601" alternateDesignIDs="86209" />'
+        '</DesignIdMapping>', encoding="utf-8")
+    ldd_to_bl, _, _ = load_studio_mapping(str(tmp_path))
+    assert ldd_to_bl["60601"] == "60601"
+    assert ldd_to_bl["86209"] == "60601"   # old number -> main's BL

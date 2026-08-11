@@ -60,6 +60,10 @@ class ColorProcessor:
         return str(code)
 
     def resolve(self, mat_id: str) -> ColorResult:
+        # LDD uses '0' as a no-op / inherited material slot in multi-material
+        # parts (e.g. materials="26,0").  Keep it untouched, not a custom color.
+        if mat_id == "0":
+            return ColorResult("0", "", 0, 0, 0, False)
         # 1. Studio's own LDD color -> Studio/BL color mapping (authoritative)
         if mat_id in self.studio_color_map:
             studio_code, (r, g, b), name = self.studio_color_map[mat_id]

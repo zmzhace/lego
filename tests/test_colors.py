@@ -37,6 +37,13 @@ def test_custom_codes_do_not_collide_with_existing():
     assert r1.bl_color_id == "520001"
     assert r2.bl_color_id == "520002"
 
+
+def test_resolve_zero_material_is_not_custom():
+    cp = ColorProcessor({}, {}, {})
+    r = cp.resolve("0")
+    assert not r.is_custom
+    assert r.bl_color_id == "0"
+
 def test_build_custom_color_xml_contains_entries():
     cp = ColorProcessor(make_bl_map(), {}, {})
     xml = cp.build_studio_custom_color_xml({"C1": ("My Red", 200, 10, 10)})
