@@ -35,6 +35,12 @@
 - 每项断言：零件数不变、0 未匹配、输出编号全部存在于 Studio 零件库
 - 批量压力测试见 `pytest tests/test_real_models.py`
 
+随机极限压力测试（`pytest tests/test_stress.py`）：
+- 用真实 LDD 零件 + 随机旋转/平移矩阵生成 120 个随机模型，覆盖多材质（含 `0` 槽）、
+  变换偏移零件、自定义颜色、未匹配编号注入、1~600 件各种规模
+- 断言：0 崩溃、零件数不变、仅预期的孤儿/注入编号未匹配、输出编号全部被 Studio 识别
+- 一次性跑过 300 个模型 / 16 万零件验证（100% 通过）
+
 ## 开发
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e . pytest PySide6 lxml
