@@ -186,11 +186,13 @@ def parse_primitive_xml(data: bytes, fallback_id: str = "") -> PrimitiveInfo:
 
 
 class LddDatabase:
-    def __init__(self, materials, primitive_names, geo_bounding, primitives):
+    def __init__(self, materials, primitive_names, geo_bounding, primitives,
+                 filelist=None):
         self.materials = materials
         self.primitive_names = primitive_names
         self.geo_bounding = geo_bounding
         self._primitives = primitives
+        self._filelist = filelist or {}
 
     def primitive(self, path):
         return self._primitives[path]
@@ -273,7 +275,7 @@ def load_ldd_database(db_path: str) -> LddDatabase:
     elif os.path.isfile(db_path):
         reader = LIFReader(db_path)
         if not reader.initok:
-            return LddDatabase({}, {}, {}, {})
+            return LddDatabase({}, {}, {}, {}, filelist={})
         loc = None
         for name in reader.filelist:
             if name.endswith("localizedStrings.loc"):
