@@ -129,6 +129,19 @@ def _studio_payload_dir():
     return ""
 
 
+def _ldd_db_path():
+    """Return the real LDD db.lif path if present, else "".
+
+    sd is the Studio data dir (``<payload>/data``); db.lif sits at
+    ``<payload>/../db.lif`` (i.e. one level above the payload dir).
+    """
+    sd = _studio_payload_dir()
+    if not sd:
+        return ""
+    p = os.path.join(os.path.dirname(sd), "..", "db.lif")
+    return p if os.path.isfile(p) else ""
+
+
 @pytest.mark.skipif(not _studio_payload_dir(), reason="real Studio data not available")
 def test_customer_model_disambiguation_and_conn_col(tmp_path):
     sd = _studio_payload_dir()
@@ -137,9 +150,9 @@ def test_customer_model_disambiguation_and_conn_col(tmp_path):
     from lddstudio.resources import data_dir
     from lddstudio.ldd_db import load_ldd_database
 
-    ldd_path = os.path.join(os.path.dirname(sd), "db.lif")  # mac unpack path
-    ldd_db = load_ldd_database(ldd_path) if os.path.isfile(ldd_path) else \
-        load_ldd_database("")
+    if not _ldd_db_path():
+        pytest.skip("real LDD db.lif not available")
+    ldd_db = load_ldd_database(_ldd_db_path())
     db_path = str(tmp_path / "map.db")
     db = build_mapping_db(db_path, ldd_db, studio_data_dir=sd, force_rebuild=True)
     studio_colors = studio_colors_for_ldd(load_color_definition(sd))
