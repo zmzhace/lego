@@ -11,7 +11,7 @@ import zipfile
 
 import pytest
 
-from lddstudio.cli import build_mapping_db, find_studio_data_dir
+from lddstudio.cli import build_mapping_db
 from lddstudio.colors import ColorProcessor, load_bl_color_map
 from lddstudio.converter import convert
 from lddstudio.ldd_db import load_ldd_database
@@ -24,8 +24,41 @@ from lddstudio.studio_data import (load_color_definition, load_studio_mapping,
 from lddstudio.transform import TransformFixer
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "models")
-LDD_DB = os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Roaming",
-                      "LEGO Company", "LEGO Digital Designer", "db.lif")
+
+
+def _studio_data_dir():
+    """Return the unpacked Studio data dir from env or known mac path.
+
+    The returned dir is the Studio ``data`` dir (contains
+    StudioPartDefinition2.txt); ldraw/ and db.lif sit one level above.
+    """
+    for base in (
+        os.environ.get("LDDSTUDIO_STUDIO_DATA_DIR", ""),
+        "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/payload/data",
+    ):
+        if base and os.path.isfile(os.path.join(base, "StudioPartDefinition2.txt")):
+            return base
+    return ""
+
+
+def _ldd_db_path():
+    """Return the real LDD db.lif path if present, else "".
+
+    Probes LDDSTUDIO_LDD_DB, then the known mac path, then derives from
+    the Studio data dir (``<payload>/data`` -> ``<payload>/../db.lif``).
+    """
+    for base in (
+        os.environ.get("LDDSTUDIO_LDD_DB", ""),
+        "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/db.lif",
+    ):
+        if base and os.path.isfile(base):
+            return base
+    sd = _studio_data_dir()
+    if sd:
+        p = os.path.join(os.path.dirname(sd), "..", "db.lif")
+        if os.path.isfile(p):
+            return p
+    return ""
 
 
 def _models():
@@ -35,18 +68,18 @@ def _models():
 
 
 def _studio_available():
-    return os.path.isdir(r"D:\Studio 2.0\data") and os.path.isfile(LDD_DB)
+    return bool(_studio_data_dir() and _ldd_db_path())
 
 
 @pytest.fixture(scope="module")
 def pipeline():
     if not _studio_available():
         pytest.skip("real Studio 2.0 data not available on this machine")
-    ldd_db = load_ldd_database(LDD_DB)
+    ldd_db = load_ldd_database(_ldd_db_path())
     db_path = os.path.join(os.environ.get("TEMP", "."), "lddstudio_regression.db")
     if os.path.exists(db_path):
         os.remove(db_path)
-    studio_data_dir = find_studio_data_dir()
+    studio_data_dir = _studio_data_dir()
     db = build_mapping_db(db_path, ldd_db, studio_data_dir=studio_data_dir,
                           force_rebuild=True)
     studio_colors = studio_colors_for_ldd(
@@ -58,7 +91,8 @@ def pipeline():
     fixer = TransformFixer(ldd_db.geo_bounding, {}, offsets)
 
     ldraw_files = set()
-    for root, _, files in os.walk(os.path.join(studio_data_dir, "..", "ldraw")):
+    for root, _, files in os.walk(
+            os.path.join(os.path.dirname(_studio_data_dir()), "ldraw")):
         for f in files:
             if f.endswith(".dat"):
                 ldraw_files.add(os.path.splitext(f)[0])
@@ -114,37 +148,9 @@ def test_real_model_converts_cleanly(pipeline, tmp_path, model):
     assert 'materials="0"' not in xml.split('materials="0,')[0] or True  # 0 appears only inside lists
 
 
-def _studio_payload_dir():
-    """Return the unpacked Studio data dir from env or known mac path.
-
-    The returned dir is the Studio ``data`` dir (contains
-    StudioPartDefinition2.txt); ldraw/ and db.lif sit one level above.
-    """
-    for base in (
-        os.environ.get("LDDSTUDIO_STUDIO_DATA_DIR", ""),
-        "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/payload/data",
-    ):
-        if base and os.path.isfile(os.path.join(base, "StudioPartDefinition2.txt")):
-            return base
-    return ""
-
-
-def _ldd_db_path():
-    """Return the real LDD db.lif path if present, else "".
-
-    sd is the Studio data dir (``<payload>/data``); db.lif sits at
-    ``<payload>/../db.lif`` (i.e. one level above the payload dir).
-    """
-    sd = _studio_payload_dir()
-    if not sd:
-        return ""
-    p = os.path.join(os.path.dirname(sd), "..", "db.lif")
-    return p if os.path.isfile(p) else ""
-
-
-@pytest.mark.skipif(not _studio_payload_dir(), reason="real Studio data not available")
+@pytest.mark.skipif(not _studio_data_dir(), reason="real Studio data not available")
 def test_customer_model_disambiguation_and_conn_col(tmp_path):
-    sd = _studio_payload_dir()
+    sd = _studio_data_dir()
     ldraw_dir = os.path.join(os.path.dirname(sd), "ldraw")
     from lddstudio.cli import build_mapping_db
     from lddstudio.resources import data_dir
