@@ -633,18 +633,18 @@ git commit -m "fix: detect Studio custom colors in ProgramData\\Studio\\CustomCo
 - Modify: `tools/e2e_studio_data.py`（如存在则适配）
 
 **Interfaces:**
-- Consumes: `load_studio_mapping`、`build_official_dat_index`、`disambiguate_candidates`
+- Consumes: `load_studio_mapping`、`build_official_dat_index`、`disambiguate_candidates`、`load_ldd_database`
 - Produces: 命令行输出统计
 
 - [ ] **Step 1: 修改 coverage_report.py 增加分类**
 
 在现有统计基础上输出：
 - 官方零件数（映射命中且 `.dat` 在官方索引）
-- 消歧零件数（Task 2 的 disambiguate_candidates 触发数）
-- 未匹配零件数
-- 输出编号缺 `.conn`/`.col` 的零件数
+- 消歧零件数（Task 2 的 disambiguate_candidates 真触发数：`dis[did]` 与无消歧基线 `filenames[did][-1]` 不同）
+- 未匹配零件数（LDD palette 全集减去已映射的 designID；数据源：`LDDSTUDIO_LDD_DB` 环境变量或默认解包路径，缺失时该行输出 "n/a (no LDD db)"）
+- 输出编号缺 `.conn` 或 `.col` 的零件数（两个目录都查）
 
-参考实现骨架（适配现有文件结构）：
+参考实现骨架（适配现有文件结构；消歧按真触发计数、conn/col 双查、分母注明）：
 
 ```python
 import os
@@ -654,9 +654,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from lddstudio.studio_data import (load_studio_mapping, build_official_dat_index,
                                    disambiguate_candidates)
+from lddstudio.ldd_db import load_ldd_database
 
 STUDIO_DATA = os.environ.get("LDDSTUDIO_STUDIO_DATA_DIR",
                             "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/payload/data")
+LDD_DB = os.environ.get("LDDSTUDIO_LDD_DB",
+                        "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/db.lif")
 
 
 def main():
@@ -671,27 +674,41 @@ def main():
     official = build_official_dat_index(ldraw_dir)
     dis = disambiguate_candidates(filenames, official)
 
-    # 消歧 = 多候选且映射后编号与无消歧基线不同
+    # 消歧真触发数：多候选且消歧后与无消歧基线（最后候选）不同
     n_dis = 0
     for did, f in dis.items():
-        bl = ldd_to_bl.get(did)
-        base = f[:-4] if f.endswith(".dat") else f
-        if bl and bl != base and did != bl:
+        baseline = filenames[did][-1] if filenames.get(did) else ""
+        if f != baseline:
             n_dis += 1
-    missing_conn = [bl for bl in set(ldd_to_bl.values())
-                    if bl and not os.path.isfile(
-                        os.path.join(ldraw_dir, "connectivity", bl + ".conn"))]
+
+    # 未匹配：LDD palette 全集减去已映射
+    unmatched = "n/a (no LDD db)"
+    if os.path.isfile(LDD_DB):
+        ldd_db = load_ldd_database(LDD_DB)
+        unmatched = len([did for did in ldd_db.primitive_names
+                         if did not in ldd_to_bl])
+
+    bls = set(ldd_to_bl.values())
+    # 缺 .conn 或 .col（双查）
+    missing = [bl for bl in bls
+               if bl and (
+                   not os.path.isfile(os.path.join(ldraw_dir, "connectivity", bl + ".conn")) or
+                   not os.path.isfile(os.path.join(ldraw_dir, "collider", bl + ".col")))]
     print("mapped total:", len(ldd_to_bl))
-    print("disambiguated:", n_dis)
-    print("official .dat:", sum(1 for bl in set(ldd_to_bl.values())
-                                if bl in official))
-    print("missing conn/col for mapped:", len(missing_conn))
+    print("disambiguated (true triggers):", n_dis)
+    print("official .dat: {}/{} ({:.1f}%)".format(
+        sum(1 for bl in bls if bl in official), len(bls),
+        100.0 * sum(1 for bl in bls if bl in official) / len(bls) if bls else 0.0))
+    print("unmatched (LDD palette):", unmatched)
+    print("missing .conn or .col:", len(missing))
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
 ```
+
+预期输出：`mapped total: 5973`、`disambiguated (true triggers): 180`、`official .dat: 2942/5360 (54.9%)`、`unmatched (LDD palette): 0`、`missing .conn or .col: 1037`（含 76257 消歧触发）。
 
 - [ ] **Step 2: 运行验证**
 
