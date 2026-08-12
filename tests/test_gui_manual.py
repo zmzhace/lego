@@ -86,3 +86,29 @@ def test_custom_definition_path_prefers_program_data(tmp_path):
     p = _studio_custom_definition_path(str(data_dir), str(pd))
     assert "CustomColors" in p
     assert p.endswith("CustomColorDefinition.txt")
+
+
+def test_existing_custom_codes_includes_program_data_write_file(tmp_path):
+    from lddstudio.gui.convert_page import (_existing_custom_codes,
+                                            _studio_custom_definition_path)
+    pd = tmp_path / "ProgramData"
+    pd_dir = pd / "Studio" / "CustomColors"
+    pd_dir.mkdir(parents=True)
+    (pd_dir / "CustomColorDefinition.txt").write_text(
+        "Studio Color Code\tBL Color Code\tStudio Color Name\n"
+        "520000\t\t\tMy Red\n", encoding="utf-8")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "CustomColorDefinition.txt").write_text(
+        "520001\t\t\tMy Blue\n", encoding="utf-8")
+    (data_dir / "StudioColorDefinition.txt").write_text(
+        "520002\t\t\tMy Green\n", encoding="utf-8")
+
+    write_file = _studio_custom_definition_path(str(data_dir), str(pd))
+    codes = _existing_custom_codes(
+        write_file,
+        os.path.join(str(data_dir), "StudioColorDefinition.txt"),
+        os.path.join(str(data_dir), "CustomColorDefinition.txt"))
+    assert 520000 in codes
+    assert 520001 in codes
+    assert 520002 in codes

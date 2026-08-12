@@ -36,11 +36,14 @@ def _studio_custom_definition_path(studio_data_dir, program_data_dir=""):
     return candidates[0] if candidates else ""
 
 
-def _existing_custom_codes(studio_data_dir):
-    """Collect Studio color codes already present in the definition files."""
+def _existing_custom_codes(*definition_paths):
+    """Collect Studio color codes already present in the definition files.
+
+    Accepts the actual definition files (data-dir and the ProgramData write
+    target) so codes allocated on an earlier run are never re-allocated.
+    """
     codes = set()
-    for fname in ("StudioColorDefinition.txt", "CustomColorDefinition.txt"):
-        p = os.path.join(studio_data_dir, fname)
+    for p in definition_paths:
         if not os.path.isfile(p):
             continue
         with open(p, encoding="utf-8", errors="replace") as f:
@@ -138,6 +141,8 @@ class ConvertPage(QWidget):
 
         studio_dir = find_studio_dir()
         studio_data_dir = find_studio_data_dir()
+        program_data = os.environ.get("ProgramData", "C:\\ProgramData")
+        custom_def = _studio_custom_definition_path(studio_data_dir, program_data)
         try:
             db = self._seed_mapping(ldd_db, studio_data_dir, studio_dir)
         except Exception as e:
@@ -148,7 +153,12 @@ class ConvertPage(QWidget):
         bl_map = load_bl_color_map(os.path.join(self.data_dir, "ldd_to_bl_colors.csv"))
         studio_colors = studio_colors_for_ldd(
             load_color_definition(studio_data_dir)) if studio_data_dir else {}
-        existing_codes = _existing_custom_codes(studio_data_dir)
+        definition_paths = [custom_def]
+        if studio_data_dir:
+            definition_paths += [
+                os.path.join(studio_data_dir, "StudioColorDefinition.txt"),
+                os.path.join(studio_data_dir, "CustomColorDefinition.txt")]
+        existing_codes = _existing_custom_codes(*definition_paths)
         cp = ColorProcessor(bl_map, studio_colors, ldd_db.materials,
                             studio_color_map=studio_colors,
                             existing_custom_codes=existing_codes)
@@ -167,8 +177,6 @@ class ConvertPage(QWidget):
         msg = "迁移完成，输出文件:\n{}\n\n替换 {} 条零件，未匹配 {} 条".format(
             out, len(rep.replaced), len(rep.unmatched))
         if self.custom_color_chk.isChecked() and rep.custom_colors:
-            program_data = os.environ.get("ProgramData", "C:\\ProgramData")
-            custom_def = _studio_custom_definition_path(studio_data_dir, program_data)
             if custom_def:
                 try:
                     n = cp.append_to_custom_definition(rep.custom_colors, custom_def)
