@@ -95,6 +95,8 @@ def test_convert_applies_offset_by_original_ldd_id():
     fixer = TransformFixer({}, {}, {"6014": off})
     rep = convert("tmp/in.lxf", "tmp/out.lxf", db, ldd_db, cp, fixer, fix_transform=True)
     assert rep.replaced == [("6014", "6014a")]
+    assert rep.disambiguated == [("6014", "6014a")]
+    assert rep.missing_conn_collider == []
     with zipfile.ZipFile("tmp/out.lxf") as z:
         data = z.read("IMAGE100.LXFML").decode()
     assert 'designID="6014a"' in data
