@@ -1,5 +1,6 @@
 import os, io, zipfile
 from lddstudio.converter import convert
+from lddstudio.report import ConversionReport
 from lddstudio.mapping import MappingDb
 from lddstudio.ldd_db import LddDatabase, MaterialDef
 from lddstudio.colors import ColorProcessor
@@ -100,3 +101,12 @@ def test_convert_applies_offset_by_original_ldd_id():
     # 偏移应应用到骨骼变换（旋转 180 度 + 平移）
     assert '-7.75' in data
     db.close()
+
+
+def test_report_disambiguated_and_missing_conn():
+    rep = ConversionReport()
+    rep.disambiguated.append(("76257", "22463"))
+    rep.missing_conn_collider.append("99999")
+    html = rep.to_html()
+    assert "76257" in html and "22463" in html
+    assert "99999" in html

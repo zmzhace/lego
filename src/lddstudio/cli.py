@@ -91,12 +91,24 @@ def main(argv=None) -> int:
                             studio_color_map=studio_colors)
         offsets = load_transform_offsets(studio_data_dir) if studio_data_dir else {}
         fixer = TransformFixer(ldd_db.geo_bounding, {}, offsets)
+        ldraw_dir = os.path.join(os.path.dirname(studio_data_dir), "ldraw") \
+            if studio_data_dir else ""
         rep = convert(args.input, args.output, db, ldd_db, cp, fixer,
-                      fix_transform=not args.no_fix_transform)
-        print("替换 {} 条，未匹配 {} 条，自定义色 {} 条".format(
-            len(rep.replaced), len(rep.unmatched), len(rep.custom_colors)))
+                      fix_transform=not args.no_fix_transform,
+                      studio_ldraw_dir=ldraw_dir)
+        print("替换 {} 条，消歧 {} 条，未匹配 {} 条，自定义色 {} 条，缺连接点/碰撞 {} 条".format(
+            len(rep.replaced), len(rep.disambiguated), len(rep.unmatched),
+            len(rep.custom_colors), len(rep.missing_conn_collider)))
+        for a, b in rep.disambiguated:
+            print("  消歧: {} -> {}".format(a, b))
         for m in rep.unmatched:
             print("  未匹配: {}".format(m.design_id))
+        for i in rep.missing_conn_collider:
+            print("  缺连接点/碰撞体积: {}".format(i))
         return 0
     parser.print_help()
     return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
