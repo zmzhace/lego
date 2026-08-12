@@ -126,7 +126,7 @@ git commit -m "fix: prefer .dat filename column for part mapping to avoid questi
 - Test: `tests/test_studio_data.py`
 
 **Interfaces:**
-- Consumes: `load_transform_data(data_dir)`（返回 `(offsets, filenames)`，filenames 是 `{design_id: ldraw_filename}`）
+- Consumes: `load_transform_data(data_dir)`（返回 `(offsets, filenames)`，filenames 为 `{design_id: [候选 .dat 文件名列表]}`，Task 2 起 list 化以保留多候选信息）
 - Produces:
   - `build_official_dat_index(ldraw_dir: str) -> set[str]`：官方 `parts/`（或 `p/`）目录下 `.dat` 文件名的去后缀集合（不含 `UnOfficial`）
   - `disambiguate_candidates(filenames: dict, official_index: set) -> dict`：返回 `{design_id: 消歧后的 .dat 名}`；仅当 designID 有多个不同候选且恰好一个在官方索引中时才消歧，否则保留原值
@@ -665,12 +665,19 @@ def main():
         print("Studio data not found:", sd)
         return 1
     ldd_to_bl, _offsets, filenames = load_studio_mapping(sd)
+    # NOTE: filenames values are lists (Task 2 起，{did: [候选]}).
+    # disambiguate_candidates 返回值是 {did: 单个 .dat 文件名}.
     ldraw_dir = os.path.join(os.path.dirname(sd), "ldraw")
     official = build_official_dat_index(ldraw_dir)
     dis = disambiguate_candidates(filenames, official)
 
-    n_dis = sum(1 for did, f in dis.items()
-                if filenames.get(did) != f and ldd_to_bl.get(did) != did)
+    # 消歧 = 多候选且映射后编号与无消歧基线不同
+    n_dis = 0
+    for did, f in dis.items():
+        bl = ldd_to_bl.get(did)
+        base = f[:-4] if f.endswith(".dat") else f
+        if bl and bl != base and did != bl:
+            n_dis += 1
     missing_conn = [bl for bl in set(ldd_to_bl.values())
                     if bl and not os.path.isfile(
                         os.path.join(ldraw_dir, "connectivity", bl + ".conn"))]
