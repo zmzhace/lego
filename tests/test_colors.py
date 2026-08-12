@@ -1,3 +1,5 @@
+import os
+
 from lddstudio.colors import ColorProcessor, load_bl_color_map
 
 def make_bl_map():
@@ -74,3 +76,13 @@ def test_build_custom_color_csv(tmp_path):
     assert "My Red" in content
     assert "#C80A0A" in content
     assert "Custom Colors" in content
+
+
+def test_append_to_custom_definition_creates_missing_parent_dir(tmp_path):
+    cp = ColorProcessor({}, {}, {})
+    out = str(tmp_path / "nested" / "Studio" / "CustomColorDefinition.txt")
+    n = cp.append_to_custom_definition({"520000": ("My Red", 200, 10, 10)}, out)
+    assert n == 1
+    with open(out, encoding="utf-8") as f:
+        content = f.read()
+    assert "My Red" in content

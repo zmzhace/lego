@@ -143,6 +143,9 @@ class ColorProcessor:
                 str(cid), "", "", "", name, name, name, name,
                 hex_rgb, "1", "Custom Colors", "-1", "o", "", "", ""]))
             added += 1
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         return added
