@@ -1,40 +1,44 @@
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from lddstudio.cli import build_mapping_db, find_studio_data_dir
-from lddstudio.ldd_db import LIFReader, LddDatabase
-from lddstudio.mapping import MappingDb
-from lddstudio.studio_lib import scan_studio_part_numbers
+from lddstudio.studio_data import (load_studio_mapping, build_official_dat_index,
+                                   disambiguate_candidates)
 
-DATA = r"D:\Studio 2.0\data"
-STUDIO_DIR = r"D:\Studio 2.0"
+STUDIO_DATA = os.environ.get("LDDSTUDIO_STUDIO_DATA_DIR",
+                            "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/payload/data")
 
-pal = os.path.join(os.environ.get("APPDATA", ""), "LEGO Company",
-                   "LEGO Digital Designer", "Palettes", "LDD.lif")
-r = LIFReader(pal)
-xml = r.filelist["/LDD.paxml"].read().decode("utf-8", errors="replace")
-ids = set(re.findall(r'designID="(\d+)"', xml))
-print("LDD palette part count:", len(ids))
 
-# build mapping db with studio dir (both authoritative seed + identity fallback)
-db_path = "tmp_e2e/map.db"
-if os.path.exists(db_path):
-    os.remove(db_path)
-ldd_db = LddDatabase({}, {i: "p" for i in ids}, {}, {})
-db = build_mapping_db(db_path, ldd_db,
-                      studio_numbers=scan_studio_part_numbers(STUDIO_DIR),
-                      studio_data_dir=DATA)
+def main():
+    sd = STUDIO_DATA
+    if not os.path.isfile(os.path.join(sd, "StudioPartDefinition2.txt")):
+        print("Studio data not found:", sd)
+        return 1
+    ldd_to_bl, _offsets, filenames = load_studio_mapping(sd)
+    # NOTE: filenames values are lists (Task 2 起，{did: [候选]}).
+    # disambiguate_candidates 返回值是 {did: 单个 .dat 文件名}.
+    ldraw_dir = os.path.join(os.path.dirname(sd), "ldraw")
+    official = build_official_dat_index(ldraw_dir)
+    dis = disambiguate_candidates(filenames, official)
 
-mapped = {i for i in ids if db.lookup(i) and db.lookup(i).bl_number}
-print("mapped:", len(mapped), "/", len(ids), "({:.1f}%)".format(100.0 * len(mapped) / len(ids)))
-unmapped = sorted(ids - mapped)
-print("unmapped:", unmapped)
+    # 消歧 = 多候选且映射后编号与无消歧基线不同
+    n_dis = 0
+    for did, f in dis.items():
+        bl = ldd_to_bl.get(did)
+        base = f[:-4] if f.endswith(".dat") else f
+        if bl and bl != base and did != bl:
+            n_dis += 1
+    missing_conn = [bl for bl in set(ldd_to_bl.values())
+                    if bl and not os.path.isfile(
+                        os.path.join(ldraw_dir, "connectivity", bl + ".conn"))]
+    print("mapped total:", len(ldd_to_bl))
+    print("disambiguated:", n_dis)
+    print("official .dat:", sum(1 for bl in set(ldd_to_bl.values())
+                                if bl in official))
+    print("missing conn/col for mapped:", len(missing_conn))
+    return 0
 
-# report by match type
-from collections import Counter
-types = Counter(db.lookup(i).match_type for i in ids)
-print("match types:", dict(types))
-db.close()
+
+if __name__ == "__main__":
+    sys.exit(main())
