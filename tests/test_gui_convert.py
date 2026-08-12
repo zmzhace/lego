@@ -25,6 +25,7 @@ def test_one_click_convert_generates_output(app, tmp_path, monkeypatch):
     monkeypatch.setattr(convert_page, "find_ldd_db", lambda: str(tmp_path / "fake_db"))
     monkeypatch.setattr(convert_page, "load_ldd_database", lambda p: LddDatabase({}, {"3001": "Brick 2 x 4"}, {}, {}))
     monkeypatch.setattr(convert_page, "find_studio_dir", lambda: "")
+    monkeypatch.setenv("ProgramData", str(tmp_path))
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -51,3 +52,7 @@ def test_one_click_convert_generates_output(app, tmp_path, monkeypatch):
         xml = z.read("IMAGE100.LXFML").decode()
     assert 'designID="3001"' in xml
     assert "迁移完成" in page.status_label.text()
+    custom_def = str(tmp_path / "Studio" / "CustomColors" / "CustomColorDefinition.txt")
+    assert os.path.exists(custom_def)
+    with open(custom_def, encoding="utf-8") as f:
+        assert "Custom 99" in f.read()
