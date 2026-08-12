@@ -240,6 +240,28 @@ def test_load_studio_mapping_includes_transformation(tmp_path):
     assert ldd_to_bl["60601"] == "86209"
 
 
+def test_build_ldd_to_bl_map_prefers_ldraw_filename(tmp_path):
+    # BL 号带字母后缀(30237a)，.dat 文件名是父编号(30237.dat)
+    content = make_partdef([
+        "264\t264\t30237a\t264\t30237.dat\t30237\tBrick, Modified 1 x 2 with Split U Clip Thick\to\t13\t1\t1\tFalse\t\tFalse\t5001\t",
+    ])
+    (tmp_path / "StudioPartDefinition2.txt").write_text(content, encoding="utf-8")
+    m = build_ldd_to_bl_map(load_part_definition(str(tmp_path)))
+    assert m["30237"] == "30237"      # 用 .dat 文件名，而非 BL 号 30237a
+
+
+def test_build_ldd_to_bl_map_fallback_order(tmp_path):
+    # 无 .dat 文件名时 fallback BL 号，再 fallback Studio 号
+    content = make_partdef([
+        "5001\t5001\t3001\t5001\t\t3001\tBrick 2 x 4\to\t13\t1\t1\tFalse\t\tFalse\t5001\t",
+        "5002\t5002\t\t5002\t\t3002\tBrick 2 x 3\to\t13\t1\t1\tFalse\t\tFalse\t5002\t",
+    ])
+    (tmp_path / "StudioPartDefinition2.txt").write_text(content, encoding="utf-8")
+    m = build_ldd_to_bl_map(load_part_definition(str(tmp_path)))
+    assert m["3001"] == "3001"      # fallback bl_no
+    assert m["3002"] == "5002"      # fallback studio_no
+
+
 def test_load_alternate_design_ids(tmp_path):
     (tmp_path / "designid.xml").write_text(
         '<DesignIdMapping>'

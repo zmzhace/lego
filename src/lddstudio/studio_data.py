@@ -183,14 +183,20 @@ def load_assembly_mapping(data_dir):
 
 
 def build_ldd_to_bl_map(rows):
-    """Return dict: ldd_design_id -> bl_number, preferring explicit BL numbers."""
+    """Return dict: ldd_design_id -> render number.
+
+    Studio renders parts by their LDraw .dat filename (col 4).  BL numbers
+    (col 2) often carry letter suffixes (30237a) whose .dat does not exist in
+    the Studio ldraw/ tree, so preferring the .dat filename avoids parts
+    showing as question marks.  Fallback order: ldraw file -> BL -> studio.
+    """
     out = {}
     for pd in rows:
         if not pd.ldd_no:
             continue
-        target = pd.bl_no
-        if not target and pd.ldraw_no:
-            target = _ldraw_no_to_bl(pd.ldraw_no)
+        target = _ldraw_no_to_bl(pd.ldraw_no) if pd.ldraw_no else ""
+        if not target:
+            target = pd.bl_no
         if not target:
             target = pd.studio_no
         if target:
