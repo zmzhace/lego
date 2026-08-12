@@ -112,3 +112,63 @@ def test_real_model_converts_cleanly(pipeline, tmp_path, model):
     with zipfile.ZipFile(out) as z:
         xml = z.read("IMAGE100.LXFML").decode()
     assert 'materials="0"' not in xml.split('materials="0,')[0] or True  # 0 appears only inside lists
+
+
+def _studio_payload_dir():
+    """Return the unpacked Studio data dir from env or known mac path.
+
+    The returned dir is the Studio ``data`` dir (contains
+    StudioPartDefinition2.txt); ldraw/ and db.lif sit one level above.
+    """
+    for base in (
+        os.environ.get("LDDSTUDIO_STUDIO_DATA_DIR", ""),
+        "/var/folders/sn/hh7w4g_j2g738_qpyw313rch0000gp/T/opencode/lddstudio-install/payload/data",
+    ):
+        if base and os.path.isfile(os.path.join(base, "StudioPartDefinition2.txt")):
+            return base
+    return ""
+
+
+@pytest.mark.skipif(not _studio_payload_dir(), reason="real Studio data not available")
+def test_customer_model_disambiguation_and_conn_col(tmp_path):
+    sd = _studio_payload_dir()
+    ldraw_dir = os.path.join(os.path.dirname(sd), "ldraw")
+    from lddstudio.cli import build_mapping_db
+    from lddstudio.resources import data_dir
+    from lddstudio.ldd_db import load_ldd_database
+
+    ldd_path = os.path.join(os.path.dirname(sd), "db.lif")  # mac unpack path
+    ldd_db = load_ldd_database(ldd_path) if os.path.isfile(ldd_path) else \
+        load_ldd_database("")
+    db_path = str(tmp_path / "map.db")
+    db = build_mapping_db(db_path, ldd_db, studio_data_dir=sd, force_rebuild=True)
+    studio_colors = studio_colors_for_ldd(load_color_definition(sd))
+    cp = ColorProcessor(load_bl_color_map(os.path.join(data_dir(), "ldd_to_bl_colors.csv")),
+                        studio_colors, ldd_db.materials, studio_color_map=studio_colors)
+    ldd_to_bl, offsets, _ = load_studio_mapping(sd)
+    fixer = TransformFixer(ldd_db.geo_bounding, {}, offsets)
+
+    inp = "tests/fixtures/models/正确的姿态_客户样例.lxf"
+    out = str(tmp_path / "out.lxf")
+    rep = convert(inp, out, db, ldd_db, cp, fixer, fix_transform=True)
+
+    out_scene = parse_lxfml(extract_lxfml(open_lxf(out).members))
+    ids = {p.design_id for b in out_scene.bricks for p in b.parts}
+    # 76257 已消歧为 22463
+    assert "22463" in ids, "76257 should disambiguate to 22463"
+    assert "76257" not in ids
+
+    # 所有输出编号的 .conn/.col 存在
+    conn_dir = os.path.join(ldraw_dir, "connectivity")
+    col_dir = os.path.join(ldraw_dir, "collider")
+    missing = [i for i in ids
+               if not os.path.isfile(os.path.join(conn_dir, i + ".conn")) or
+                  not os.path.isfile(os.path.join(col_dir, i + ".col"))]
+    assert not missing, "parts missing conn/col: {}".format(missing)
+
+    # 零件数不变
+    in_scene = parse_lxfml(extract_lxfml(open_lxf(inp).members))
+    n_in = sum(len(b.parts) for b in in_scene.bricks)
+    n_out = sum(len(b.parts) for b in out_scene.bricks)
+    assert n_in == n_out
+    db.close()
