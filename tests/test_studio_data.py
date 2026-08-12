@@ -15,6 +15,8 @@ from lddstudio.studio_data import (
     load_assembly_mapping,
     load_transformation_mapping,
     load_alternate_design_ids,
+    build_official_dat_index,
+    disambiguate_candidates,
 )
 
 PARTDEF_HEADER = (
@@ -190,7 +192,7 @@ def test_load_studio_mapping_combines_sources(tmp_path):
     assert ldd_to_bl["41823"] == "41823"    # from transform filenames
     assert ldd_to_bl["44740"] == "44740"
     assert offsets["44740"].ry == 90.0
-    assert filenames["41823"] == "41823.dat"
+    assert filenames["41823"] == ["41823.dat"]
 
 
 def test_load_assembly_mapping(tmp_path):
@@ -285,3 +287,78 @@ def test_alternate_id_resolves_to_main_bl(tmp_path):
     ldd_to_bl, _, _ = load_studio_mapping(str(tmp_path))
     assert ldd_to_bl["60601"] == "60601"
     assert ldd_to_bl["86209"] == "60601"   # old number -> main's BL
+
+
+def test_build_official_dat_index():
+    import os
+    root = os.path.join(os.path.dirname(__file__), "fixtures", "ldraw")
+    os.makedirs(os.path.join(root, "parts"), exist_ok=True)
+    os.makedirs(os.path.join(root, "UnOfficial", "parts"), exist_ok=True)
+    open(os.path.join(root, "parts", "22463.dat"), "w").write("")
+    open(os.path.join(root, "UnOfficial", "parts", "76257.dat"), "w").write("")
+    idx = build_official_dat_index(root)
+    assert "22463" in idx
+    assert "76257" not in idx
+
+
+def test_disambiguate_prefers_official():
+    # 76257 有两个候选，仅 22463 在官方索引
+    filenames = {"76257": "22463.dat", "3001": "3001.dat", "10067": "11010.dat"}
+    official = {"22463", "3001", "11010"}
+    out = disambiguate_candidates(filenames, official)
+    assert out["76257"] == "22463.dat"  # 消歧（返回 .dat 文件名，下游剥离后缀）
+    assert out["10067"] == "11010.dat"
+    assert out["3001"] == "3001.dat"    # 单一候选不变
+
+
+def test_disambiguate_multiple_candidates_picks_official():
+    # 每个 designID 对应多个候选文件名，仅一个在官方索引时消歧
+    filenames = {"76257": ["22463.dat", "76257.dat"],
+                 "10067": ["11010.dat", "10067.dat"],
+                 "2001": ["x.dat", "y.dat"]}
+    official = {"22463", "11010"}
+    out = disambiguate_candidates(filenames, official)
+    assert out["76257"] == "22463.dat"   # 官方候选胜出
+    assert out["10067"] == "11010.dat"
+    assert out["2001"] == "y.dat"        # 无唯一官方候选，保留原值(最后候选)
+
+
+def test_load_studio_mapping_disambiguates_multi_candidate(tmp_path):
+    data = [
+        {"type": "transformation", "ldraw": {"filename": "22463.dat", "colors": []},
+         "ldd": {"designId": 76257},
+         "rotation": {"unit": "degree", "x": 0.0, "y": 0.0, "z": 0.0},
+         "translation": {"unit": "LDU", "x": 0.0, "y": 0.0, "z": 0.0}},
+        {"type": "transformation", "ldraw": {"filename": "76257.dat", "colors": []},
+         "ldd": {"designId": 76257},
+         "rotation": {"unit": "degree", "x": 0.0, "y": 0.0, "z": 0.0},
+         "translation": {"unit": "LDU", "x": 0.0, "y": 0.0, "z": 0.0}},
+    ]
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "ldraw_lxfml_mapping.json").write_text(json.dumps(data), encoding="utf-8")
+    ldraw = tmp_path / "ldraw" / "parts"
+    ldraw.mkdir(parents=True)
+    (ldraw / "22463.dat").write_text("")
+    uno = tmp_path / "ldraw" / "UnOfficial" / "parts"
+    uno.mkdir(parents=True)
+    (uno / "76257.dat").write_text("")
+    ldd_to_bl, _, _ = load_studio_mapping(str(tmp_path / "data"))
+    assert ldd_to_bl["76257"] == "22463"   # 官方 parts/ 优先
+
+
+def test_load_studio_mapping_skips_disambiguation_without_ldraw(tmp_path):
+    # 无官方索引(无 ldraw 目录)时跳过消歧，保留 JSON 最后候选(原行为)
+    data = [
+        {"type": "transformation", "ldraw": {"filename": "22463.dat", "colors": []},
+         "ldd": {"designId": 76257},
+         "rotation": {"unit": "degree", "x": 0.0, "y": 0.0, "z": 0.0},
+         "translation": {"unit": "LDU", "x": 0.0, "y": 0.0, "z": 0.0}},
+        {"type": "transformation", "ldraw": {"filename": "76257.dat", "colors": []},
+         "ldd": {"designId": 76257},
+         "rotation": {"unit": "degree", "x": 0.0, "y": 0.0, "z": 0.0},
+         "translation": {"unit": "LDU", "x": 0.0, "y": 0.0, "z": 0.0}},
+    ]
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "ldraw_lxfml_mapping.json").write_text(json.dumps(data), encoding="utf-8")
+    ldd_to_bl, _, _ = load_studio_mapping(str(tmp_path / "data"))
+    assert ldd_to_bl["76257"] == "76257"   # 无 ldraw 目录，保留原行为

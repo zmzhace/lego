@@ -88,12 +88,18 @@ def load_studio_mapping(data_dir):
     Returns (ldd_to_bl, offsets, filenames):
       - ldd_to_bl: dict design_id -> BL number
       - offsets:   dict design_id -> TransformOffset
-      - filenames: dict design_id -> ldraw filename
+      - filenames: dict design_id -> list of candidate ldraw filenames
     """
     rows = load_part_definition(data_dir)
     ldd_to_bl = build_ldd_to_bl_map(rows)
     offsets, filenames = load_transform_data(data_dir)
     from_transform = build_ldd_to_bl_from_filenames(filenames.items())
+    # 多候选优先官方件（76257 -> 22463.dat）
+    official_index = build_official_dat_index(
+        os.path.join(os.path.dirname(data_dir), "ldraw"))
+    if official_index:
+        disambiguated = disambiguate_candidates(filenames, official_index)
+        from_transform = build_ldd_to_bl_from_filenames(disambiguated.items())
     for did, bl in from_transform.items():
         ldd_to_bl.setdefault(did, bl)
     for did, bl in load_assembly_mapping(data_dir).items():
@@ -182,6 +188,48 @@ def load_assembly_mapping(data_dir):
     return out
 
 
+def build_official_dat_index(ldraw_dir):
+    """Return set of .dat basenames in official parts dirs (parts/, p/).
+
+    UnOfficial/ and collider/connectivity are excluded.  Returns empty set
+    when ldraw_dir is missing.
+    """
+    out = set()
+    if not ldraw_dir or not os.path.isdir(ldraw_dir):
+        return out
+    for root, _dirs, files in os.walk(ldraw_dir):
+        rel = os.path.relpath(root, ldraw_dir).replace("\\", "/")
+        parts = rel.split("/")
+        if "UnOfficial" in parts or "unofficial" in parts:
+            continue
+        if not (parts[-1] == "parts" or parts[-1] == "p"):
+            continue
+        for f in files:
+            if f.endswith(".dat"):
+                out.add(f[:-4])
+    return out
+
+
+def disambiguate_candidates(filenames, official_index):
+    """Pick the official .dat when a designID has multiple candidates.
+
+    filenames: {design_id: ldraw_filename or list of candidates}.  Returns a
+    new dict design_id -> resolved .dat filename: multi-candidate designIDs
+    with exactly one official candidate resolve to that official file; all
+    others keep their original value.
+    """
+    out = {}
+    for did, val in filenames.items():
+        cands = list(val) if isinstance(val, (list, tuple, set)) else [val]
+        official = [c for c in cands
+                    if c.endswith(".dat") and c[:-4] in official_index]
+        if len(cands) > 1 and len(official) == 1:
+            out[did] = official[0]
+        else:
+            out[did] = cands[-1]
+    return out
+
+
 def build_ldd_to_bl_map(rows):
     """Return dict: ldd_design_id -> render number.
 
@@ -255,8 +303,10 @@ def load_transform_data(data_dir):
     """Parse ldraw_lxfml_mapping.json in one pass.
 
     Returns (offsets, filenames): offsets maps design_id -> TransformOffset
-    and filenames maps design_id -> ldraw filename for 'transformation'
-    entries.
+    and filenames maps design_id -> list of distinct candidate ldraw
+    filenames for 'transformation' entries (a designID can appear in
+    multiple entries with different .dat files, e.g. 76257 -> 22463.dat and
+    76257.dat).
     """
     path = os.path.join(data_dir, TRANSFORM_JSON_FILE)
     if not os.path.isfile(path):
@@ -284,7 +334,10 @@ def load_transform_data(data_dir):
             rot.get("x", 0.0), rot.get("y", 0.0), rot.get("z", 0.0),
             tr.get("x", 0.0), tr.get("y", 0.0), tr.get("z", 0.0))
         fname = (entry.get("ldraw") or {}).get("filename", "")
-        filenames[did] = fname
+        if fname:
+            cands = filenames.setdefault(did, [])
+            if fname not in cands:
+                cands.append(fname)
     return offsets, filenames
 
 
@@ -292,10 +345,15 @@ def build_ldd_to_bl_from_filenames(offset_pairs):
     """Given iterable of (design_id, ldraw_filename) -> dict design_id->bl.
 
     ldraw_filename like '41823.dat' or 'bl_973pb2017c01.dat'.  Numeric
-    filenames map directly to BL numbers; slugs are kept as-is.
+    filenames map directly to BL numbers; slugs are kept as-is.  A
+    design_id may map to a list of candidate filenames (multi-candidate
+    entries in the mapping JSON); the last candidate is used, matching the
+    old "last entry wins" collapse.
     """
     out = {}
     for did, fname in offset_pairs:
+        if isinstance(fname, (list, tuple)):
+            fname = fname[-1] if fname else ""
         if not fname:
             continue
         base = fname.split(".dat")[0]
