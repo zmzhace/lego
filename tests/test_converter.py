@@ -112,3 +112,21 @@ def test_report_disambiguated_and_missing_conn():
     html = rep.to_html()
     assert "76257" in html and "22463" in html
     assert "99999" in html
+
+
+def test_convert_collects_missing_conn_and_collider_files(tmp_path):
+    make_input(LXF)
+    db = setup()
+    ldd_db = LddDatabase({}, {"3001": "Brick 2 x 4", "99999": "Unknown"}, {}, {})
+    cp = ColorProcessor({"5": ("5", 196, 0, 38, "Solid")}, {}, {})
+    fixer = TransformFixer({}, {})
+    conn_dir = tmp_path / "connectivity"
+    col_dir = tmp_path / "collider"
+    conn_dir.mkdir()
+    col_dir.mkdir()
+    (conn_dir / "3001.conn").write_text("", encoding="utf-8")
+    (col_dir / "3001.col").write_text("", encoding="utf-8")
+    (conn_dir / "99999.conn").write_text("", encoding="utf-8")
+    rep = convert("tmp/in.lxf", str(tmp_path / "out.lxf"), db, ldd_db, cp, fixer,
+                  fix_transform=False, studio_ldraw_dir=str(tmp_path))
+    assert rep.missing_conn_collider == ["99999"]
