@@ -74,3 +74,15 @@ def test_gui_seed_mapping_matches_known_part(app, tmp_path, monkeypatch):
     assert reports
     assert all(m.design_id != "3001" for m in reports[0].unmatched)
     assert os.path.exists(out)
+
+
+def test_custom_definition_path_prefers_program_data(tmp_path):
+    from lddstudio.gui.convert_page import _studio_custom_definition_path
+    pd = tmp_path / "ProgramData"
+    (pd / "Studio" / "CustomColors").mkdir(parents=True)
+    (pd / "Studio" / "CustomColors" / "CustomColorDefinition.txt").write_text("", encoding="utf-8")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    p = _studio_custom_definition_path(str(data_dir), str(pd))
+    assert "CustomColors" in p
+    assert p.endswith("CustomColorDefinition.txt")

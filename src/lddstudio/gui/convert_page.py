@@ -14,18 +14,26 @@ from ..studio_data import load_color_definition, load_transform_offsets, \
 from ..transform import TransformFixer
 
 
-def _studio_custom_definition_path(studio_data_dir):
-    """Locate Studio's CustomColorDefinition.txt to register custom colors."""
-    if not studio_data_dir:
-        return ""
-    candidates = [
-        os.path.join(studio_data_dir, "CustomColors", "CustomColorDefinition.txt"),
-        os.path.join(studio_data_dir, "CustomColorDefinition.txt"),
-    ]
+def _studio_custom_definition_path(studio_data_dir, program_data_dir=""):
+    """Locate Studio's CustomColorDefinition.txt to register custom colors.
+
+    Customers' Studio keeps custom colors at
+    C:\\ProgramData\\Studio\\CustomColors\\CustomColorDefinition.txt.
+    Fall back to the <data>/CustomColors and <data> locations.
+    """
+    candidates = []
+    if program_data_dir:
+        candidates.append(os.path.join(program_data_dir, "Studio", "CustomColors",
+                                       "CustomColorDefinition.txt"))
+    if studio_data_dir:
+        candidates += [
+            os.path.join(studio_data_dir, "CustomColors", "CustomColorDefinition.txt"),
+            os.path.join(studio_data_dir, "CustomColorDefinition.txt"),
+        ]
     for c in candidates:
         if os.path.isfile(c):
             return c
-    return os.path.join(studio_data_dir, "CustomColors", "CustomColorDefinition.txt")
+    return candidates[0] if candidates else ""
 
 
 def _existing_custom_codes(studio_data_dir):
@@ -159,7 +167,8 @@ class ConvertPage(QWidget):
         msg = "迁移完成，输出文件:\n{}\n\n替换 {} 条零件，未匹配 {} 条".format(
             out, len(rep.replaced), len(rep.unmatched))
         if self.custom_color_chk.isChecked() and rep.custom_colors:
-            custom_def = _studio_custom_definition_path(studio_data_dir)
+            program_data = os.environ.get("ProgramData", "C:\\ProgramData")
+            custom_def = _studio_custom_definition_path(studio_data_dir, program_data)
             if custom_def:
                 try:
                     n = cp.append_to_custom_definition(rep.custom_colors, custom_def)
